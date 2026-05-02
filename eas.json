@@ -1,0 +1,25 @@
+{
+  "cli": {
+    "version": ">= 10.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APOLLO_URI": "https://savor-app-server-gql-production.up.railway.app"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APOLLO_URI": "https://savor-app-server-gql-production.up.railway.app"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_APOLLO_URI": "https://savor-app-server-gql-production.up.railway.app"
+      }
+    }
+  }
+}

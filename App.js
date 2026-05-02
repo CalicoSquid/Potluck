@@ -1,20 +1,36 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from "react";
+import { useFonts } from "expo-font";
+import { View, ActivityIndicator } from "react-native";
+import { ApolloProvider } from "@apollo/client";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
+import client from "./src/apollo/client";
+import RootNavigator from "./src/navigation/RootNavigator";
+import { colors } from "./src/constants/colors";
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Raleway:         require("./assets/fonts/Raleway-Regular.ttf"),
+    RalewayBold:     require("./assets/fonts/Raleway-Bold.ttf"),
+    RalewaySemiBold: require("./assets/fonts/Raleway-SemiBold.ttf"),
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.gradientStart }}>
+        <ActivityIndicator color={colors.white} />
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ApolloProvider client={client}>
+          <RootNavigator />
+        </ApolloProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
