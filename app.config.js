@@ -4,7 +4,7 @@ export default {
     slug: "savor-tonight",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/savor-tonight.png",
+    icon: "./assets/tonight_icon.png",
     userInterfaceStyle: "light",
     splash: {
       image: "./assets/savor-tonight.png",
@@ -17,7 +17,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/savor-tonight.png",
+        foregroundImage: "./assets/tonight_icon.png",
         backgroundColor: "#fffefe",
       },
       package: "com.calicosquid.savortonight",
