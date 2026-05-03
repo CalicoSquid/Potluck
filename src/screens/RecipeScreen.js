@@ -6,83 +6,92 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Share,
+  Linking,
   Dimensions,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { Icon } from "react-native-paper";
 import { colors } from "../constants/colors";
 import TonightButton from "../components/TonightButton";
 import TonightCard from "../components/TonightCard";
+import PotluckHeader from "../components/PotluckHeader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// ── Brand palette — extracted from Savor logo, used throughout ───────────────
+const BRAND = {
+  teal:      "#142829",
+  tealDark:  "#0d1c1d",
+  tealLight: "#1a3536",
+  green:     "#4caf50",
+  orange:    "#FF9800",
+  border:    "#f0ebe6",   // Savor warm border, the only "neutral" we use
+};
+
+// ── Inline times ─────────────────────────────────────────────────────────────
 
 const formatTime = (t) => {
   if (!t) return null;
   const parts = [];
-  if (t.hours > 0)   parts.push(`${t.hours}h`);
+  if (t.hours   > 0) parts.push(`${t.hours}h`);
   if (t.minutes > 0) parts.push(`${t.minutes}m`);
   return parts.length ? parts.join(" ") : null;
 };
 
-// ── Times bar — matches Savor's Times component layout ──────────────────────
-const TimesBar = ({ times }) => {
+const InlineTimes = ({ times }) => {
   const entries = [
-    { label: "PREP",   value: formatTime(times?.prep) },
-    { label: "COOK",   value: formatTime(times?.cook) },
-    { label: "TOTAL",  value: formatTime(times?.total) },
-  ];
-  const hasAny = entries.some((e) => e.value);
-  if (!hasAny) return null;
-
+    { label: "Prep",  value: formatTime(times?.prep) },
+    { label: "Cook",  value: formatTime(times?.cook) },
+    { label: "Total", value: formatTime(times?.total) },
+  ].filter((e) => e.value);
+  if (!entries.length) return null;
   return (
-    <View style={timeStyles.row}>
+    <View style={inlineTimeStyles.row}>
       {entries.map((e, i) => (
-        <View
-          key={e.label}
-          style={[
-            timeStyles.cell,
-            i === 1 && timeStyles.middleCell,
-          ]}
-        >
-          <Text style={timeStyles.label}>{e.label}</Text>
-          <Text style={timeStyles.value}>{e.value ?? "—"}</Text>
-        </View>
+        <React.Fragment key={e.label}>
+          {i > 0 && <View style={inlineTimeStyles.dot} />}
+          <Text style={inlineTimeStyles.text}>
+            <Text style={inlineTimeStyles.label}>{e.label} </Text>
+            {e.value}
+          </Text>
+        </React.Fragment>
       ))}
     </View>
   );
 };
 
-const timeStyles = StyleSheet.create({
+const inlineTimeStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    width: "100%",
-    paddingVertical: 14,
+    alignItems:    "center",
+    flexWrap:      "wrap",
+    gap:           8,
+    marginTop:     4,
   },
-  cell: {
-    flex: 1,
-    alignItems: "center",
-    gap: 5,
-  },
-  middleCell: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: colors.primary + "30",
+  dot: {
+    width:           3,
+    height:          3,
+    borderRadius:    2,
+    backgroundColor: BRAND.orange,
+    opacity:         0.6,
   },
   label: {
-    fontFamily:    "Raleway",
-    fontSize:      10,
-    letterSpacing: 1.2,
-    color:         colors.primary,
-    textTransform: "uppercase",
-  },
-  value: {
     fontFamily: "RalewayBold",
-    fontSize:   15,
-    color:      colors.textDark,
+    fontSize:   12,
+    color:      colors.primary,
+  },
+  text: {
+    fontFamily: "Raleway",
+    fontSize:   12,
+    color:      BRAND.teal,
+    opacity:    0.75,
   },
 });
 
-// ── Tab bar ──────────────────────────────────────────────────────────────────
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+
 const TabBar = ({ active, onChange }) => (
   <View style={tabStyles.wrap}>
     {["Recipe", "Shop"].map((tab) => (
@@ -109,80 +118,292 @@ const TabBar = ({ active, onChange }) => (
 
 const tabStyles = StyleSheet.create({
   wrap: {
-    flexDirection:   "row",
+    flexDirection:     "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#f0ebe6",
-    marginHorizontal: 20,
-    marginBottom: 4,
+    borderBottomColor: BRAND.border,
+    marginHorizontal:  20,
+    marginBottom:      4,
   },
   tab: {
-    flex:           1,
-    alignItems:     "center",
+    flex:            1,
+    alignItems:      "center",
     paddingVertical: 12,
-    position:       "relative",
+    position:        "relative",
   },
   label: {
     fontFamily: "RalewaySemiBold",
     fontSize:   15,
-    color:      "#bbb",
+    color:      BRAND.teal,
+    opacity:    0.4,           // inactive — quiet but on-brand
   },
   labelActive: {
-    color: colors.textDark,
+    color:   BRAND.teal,
+    opacity: 1,
   },
   indicator: {
-    position: "absolute",
-    bottom:   -1,
-    left:     "20%",
-    right:    "20%",
-    height:   3,
+    position:     "absolute",
+    bottom:       -1,
+    left:         "20%",
+    right:        "20%",
+    height:       3,
     borderRadius: 2,
   },
 });
 
-// ── Main screen ──────────────────────────────────────────────────────────────
+// ── Ingredient list (Recipe tab) ──────────────────────────────────────────────
+
+const IngredientList = ({ ingredients, recipeYield }) => (
+  <View>
+    {recipeYield ? (
+      <Text style={styles.yieldText}>Serves {recipeYield}</Text>
+    ) : null}
+    <TonightCard>
+      {(ingredients || []).map((item, i) => (
+        <View
+          key={i}
+          style={[
+            styles.ingredientRow,
+            i < (ingredients.length - 1) && styles.ingredientRowBorder,
+          ]}
+        >
+          <View style={styles.ingredientDot} />
+          <Text style={styles.ingredientText}>{item}</Text>
+        </View>
+      ))}
+    </TonightCard>
+  </View>
+);
+
+// ── Shop tab — checkable list + share ────────────────────────────────────────
+
+const UNITS = new Set([
+  "cup","cups","c","tbsp","tablespoon","tablespoons","tsp","teaspoon","teaspoons",
+  "oz","ounce","ounces","lb","lbs","pound","pounds","g","gram","grams","kg",
+  "ml","l","litre","litres","liter","liters","pint","pints","quart","quarts",
+  "gallon","gallons","fl","clove","cloves","slice","slices","piece","pieces",
+  "sprig","sprigs","bunch","handful","pinch","dash","drop","can","cans",
+  "jar","jars","package","pkg","bag","stick","head","stalk","stalks","sheet",
+]);
+
+const SKIP = new Set([
+  "water","salt","pepper","black pepper","white pepper","oil","olive oil",
+  "vegetable oil","cooking oil","cooking spray","spray","ice","ice cubes",
+  "to taste","as needed","as required",
+]);
+
+const parseIngredientName = (str) => {
+  let s = str.replace(/\(.*?\)/g, "").trim();
+  s = s.split(/[,;]/)[0].trim();
+  s = s.replace(/^[\d\s\/½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]+/, "").trim();
+  const words = s.split(/\s+/);
+  if (words.length > 1 && UNITS.has(words[0].toLowerCase().replace(/\.$/, ""))) {
+    s = words.slice(1).join(" ");
+  }
+  s = s.replace(/^(large|medium|small|extra large|extra-large|big|tiny|fresh|dried|frozen|whole|ground|chopped|minced|sliced|diced|grated|shredded)\s+/i, "");
+  return s.trim();
+};
+
+const shouldSkip = (str) => {
+  const name = parseIngredientName(str).toLowerCase();
+  return SKIP.has(name) || name.length === 0;
+};
+
+const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
+  const shopItems = React.useMemo(() => (ingredients || [])
+    .map((raw, originalIndex) => ({ raw, name: parseIngredientName(raw), originalIndex }))
+    .filter(({ raw }) => !shouldSkip(raw)),
+  [ingredients]);
+
+  const [checked, setChecked] = useState({});
+
+  const toggle = (i) =>
+    setChecked((prev) => ({ ...prev, [i]: !prev[i] }));
+
+  const handleShare = () => {
+    const lines = shopItems.map(({ name }) => `• ${name}`).join("\n");
+    const header = recipeYield
+      ? `Shopping list for ${recipeName} (serves ${recipeYield}):`
+      : `Shopping list for ${recipeName}:`;
+    Share.share({ message: `${header}\n\n${lines}` });
+  };
+
+  const checkedCount = Object.values(checked).filter(Boolean).length;
+  const total        = shopItems.length;
+
+  return (
+    <View style={styles.tabContent}>
+      <View style={shopStyles.headerRow}>
+        <View>
+          <Text style={styles.sectionLabel}>Shopping list</Text>
+          {recipeYield ? (
+            <Text style={styles.yieldText}>Serves {recipeYield}</Text>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          style={shopStyles.shareBtn}
+          onPress={handleShare}
+          activeOpacity={0.7}
+        >
+          <Icon source="share-variant" size={16} color={colors.primary} />
+          <Text style={shopStyles.shareLabel}>Share list</Text>
+        </TouchableOpacity>
+      </View>
+
+      {checkedCount > 0 && (
+        <Text style={shopStyles.progress}>
+          {checkedCount} of {total} grabbed
+        </Text>
+      )}
+
+      <TonightCard style={shopStyles.listCard}>
+        {shopItems.map(({ name }, i) => (
+          <TouchableOpacity
+            key={i}
+            style={[
+              shopStyles.row,
+              i < shopItems.length - 1 && shopStyles.rowBorder,
+            ]}
+            onPress={() => toggle(i)}
+            activeOpacity={0.7}
+          >
+            <View style={[shopStyles.checkbox, checked[i] && shopStyles.checkboxDone]}>
+              {checked[i] && <Icon source="check" size={14} color="#fff" />}
+            </View>
+            <Text style={[shopStyles.itemText, checked[i] && shopStyles.itemDone]}>
+              {name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </TonightCard>
+
+      {checkedCount === total && total > 0 && (
+        <Text style={shopStyles.allDone}>All grabbed — time to cook!</Text>
+      )}
+    </View>
+  );
+};
+
+const shopStyles = StyleSheet.create({
+  headerRow: {
+    flexDirection:  "row",
+    justifyContent: "space-between",
+    alignItems:     "flex-start",
+  },
+  shareBtn: {
+    flexDirection:     "row",
+    alignItems:        "center",
+    gap:               5,
+    paddingVertical:   2,
+    paddingHorizontal: 10,
+    borderRadius:      20,
+    borderWidth:       1,
+    borderColor:       colors.primary + "40",
+    backgroundColor:   colors.primary + "0D",
+  },
+  shareLabel: {
+    fontFamily: "RalewayBold",
+    fontSize:   12,
+    color:      colors.primary,
+  },
+  progress: {
+    fontFamily: "Raleway",
+    fontSize:   12,
+    color:      BRAND.teal,
+    opacity:    0.55,
+    marginTop:  -4,
+  },
+  listCard: { padding: 0 },
+  row: {
+    flexDirection:     "row",
+    alignItems:        "center",
+    gap:               14,
+    paddingVertical:   13,
+    paddingHorizontal: 16,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BRAND.border,
+  },
+  checkbox: {
+    width:           22,
+    height:          22,
+    borderRadius:    6,
+    borderWidth:     2,
+    borderColor:     BRAND.border,
+    flexShrink:      0,
+    alignItems:      "center",
+    justifyContent:  "center",
+  },
+  checkboxDone: {
+    backgroundColor: colors.primary,
+    borderColor:     colors.primary,
+  },
+  itemText: {
+    flex:       1,
+    fontFamily: "Raleway",
+    fontSize:   15,
+    color:      BRAND.teal,
+    lineHeight: 22,
+  },
+  itemDone: {
+    color:              BRAND.teal,
+    opacity:            0.4,
+    textDecorationLine: "line-through",
+  },
+  allDone: {
+    fontFamily: "RalewayBold",
+    fontSize:   13,
+    color:      colors.primary,
+    textAlign:  "center",
+    marginTop:  4,
+  },
+});
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+
 export default function RecipeScreen({ navigation, route }) {
-  const { recipe, spinCount, seenIds, isLast } = route.params;
+  const { recipe, spinCount, seenIds } = route.params;
   const [activeTab, setActiveTab] = useState("Recipe");
   const insets = useSafeAreaInsets();
 
   const tags = [recipe.cuisine, recipe.category].filter(Boolean);
 
+  const recipeUrl = `https://getsavor.recipes/r/${recipe.id}`;
+
+  const handleSaveToSavor = () => {
+    // Deep links into Savor's Create screen with the recipe URL pre-filled.
+    // savor://create?url=... is handled by Savor's linking config in App.js,
+    // which decodes the param and passes it to the Create screen as route.params.url.
+    // Falls back to Play Store if Savor isn't installed.
+    const deepLink = `savor://create?url=${encodeURIComponent(recipeUrl)}`;
+    Linking.openURL(deepLink).catch(() => {
+      Linking.openURL("https://play.google.com/store/apps/details?id=com.calicosquid.savorrecipes");
+    });
+  };
+
+  // Sticky bottom: TonightButton x2 (each ~94px outer with marginVertical 8),
+  // tertiary link ~30px, top padding 12, top border 1, plus the safe-area inset.
+  const stickyHeight = 94 + 94 + 30 + 12 + (insets.bottom || 12);
+
   return (
     <View style={styles.root}>
 
-      {/* ── Gradient header ── */}
-      <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
-        style={styles.headerBand}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-      >
-        <SafeAreaView edges={["top"]} style={styles.headerInner}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.backArrow}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>{recipe.name}</Text>
-          <View style={styles.headerRight} />
-        </SafeAreaView>
-      </LinearGradient>
+      {/* ── Header ── */}
+      <PotluckHeader
+        onBack={() => navigation.goBack()}
+        spinCount={spinCount}
+      />
 
-      {/* ── Scrollable body ── */}
+      {/* ── Scroll body ── */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: stickyHeight + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero image */}
         {recipe.image ? (
           <View style={styles.imageWrap}>
-            <Image
-              source={{ uri: recipe.image }}
-              style={styles.image}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: recipe.image }} style={styles.image} resizeMode="cover" />
           </View>
         ) : (
           <View style={[styles.imageWrap, styles.imagePlaceholder]}>
@@ -190,7 +411,7 @@ export default function RecipeScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* Tags + title + meta */}
+        {/* Meta */}
         <View style={styles.metaSection}>
           {tags.length > 0 && (
             <View style={styles.tags}>
@@ -201,31 +422,31 @@ export default function RecipeScreen({ navigation, route }) {
               ))}
             </View>
           )}
-
           <Text style={styles.recipeName}>{recipe.name}</Text>
-
           {recipe.description ? (
             <Text style={styles.description}>{recipe.description}</Text>
           ) : null}
-
+          <InlineTimes times={recipe.times} />
           {recipe.user?.username ? (
             <Text style={styles.author}>Shared by {recipe.user.username}</Text>
           ) : null}
         </View>
 
-        {/* Times card */}
-        <TonightCard style={styles.timesCard}>
-          <TimesBar times={recipe.times} />
-        </TonightCard>
-
-        {/* Tab bar */}
+        {/* Tabs */}
         <TabBar active={activeTab} onChange={setActiveTab} />
 
-        {/* Tab content */}
         {activeTab === "Recipe" ? (
           <View style={styles.tabContent}>
-            <Text style={styles.sectionLabel}>Instructions</Text>
-            {(recipe.instructions || []).map((step, i) => (
+            <Text style={styles.sectionLabel}>Ingredients</Text>
+            <IngredientList
+              ingredients={recipe.ingredients}
+              recipeYield={recipe.recipeYield}
+            />
+            <View style={styles.sectionDivider} />
+            <Text style={styles.sectionLabel}>Steps</Text>
+            {(recipe.instructions || []).length === 0 ? (
+              <Text style={styles.emptyState}>No steps available for this recipe.</Text>
+            ) : (recipe.instructions || []).map((step, i) => (
               <TonightCard key={i} style={styles.stepCard}>
                 <View style={styles.stepRow}>
                   <LinearGradient
@@ -241,48 +462,39 @@ export default function RecipeScreen({ navigation, route }) {
             ))}
           </View>
         ) : (
-          <View style={styles.tabContent}>
-            <Text style={styles.sectionLabel}>Ingredients</Text>
-            {recipe.recipeYield ? (
-              <Text style={styles.yieldText}>Serves {recipe.recipeYield}</Text>
-            ) : null}
-            <TonightCard>
-              {(recipe.ingredients || []).map((item, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.ingredientRow,
-                    i < recipe.ingredients.length - 1 && styles.ingredientRowBorder,
-                  ]}
-                >
-                  <View style={styles.ingredientDot} />
-                  <Text style={styles.ingredientText}>{item}</Text>
-                </View>
-              ))}
-            </TonightCard>
-          </View>
+          <ShopTab
+            ingredients={recipe.ingredients}
+            recipeName={recipe.name}
+            recipeId={recipe.id}
+            recipeYield={recipe.recipeYield}
+          />
         )}
       </ScrollView>
 
-      {/* ── Sticky bottom CTA ── */}
-      <View style={[styles.stickyBottom, { paddingBottom: 16 + insets.bottom }]}>
+      {/* ── Sticky bottom ── */}
+      <View style={[styles.stickyBottom, { paddingBottom: insets.bottom || 12 }]}>
         <TonightButton
-          icon="✅"
+          icon="check-bold"
           title="Cooked it!"
-          subtitle="Mark as done and give feedback"
+          subtitle="Mark as done and go eat"
           onPress={() => navigation.navigate("Done", { recipe })}
         />
-        {!isLast && (
-          <TouchableOpacity
-            style={styles.spinAgainBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.spinAgainLabel}>
-              ← Spin again ({3 - spinCount} left)
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TonightButton
+          icon="content-save-outline"
+          title="Save to Savor"
+          subtitle="Import this recipe into your box"
+          gradientColors={[BRAND.tealLight, BRAND.tealDark]}
+          shadowColor={BRAND.teal}
+          onPress={handleSaveToSavor}
+        />
+        <TouchableOpacity
+          style={styles.spinAgainBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+        >
+          <Text style={styles.spinAgainLabel}>← Back to spinning</Text>
+        </TouchableOpacity>
       </View>
 
     </View>
@@ -292,47 +504,23 @@ export default function RecipeScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.offWhite },
 
-  // Header
-  headerBand:  { paddingBottom: 14 },
-  headerInner: {
-    flexDirection:  "row",
-    alignItems:     "center",
-    paddingTop:     4,
-    paddingHorizontal: 16,
-  },
-  backBtn:   { width: 32 },
-  backArrow: { fontSize: 28, color: "#fff", lineHeight: 32 },
-  headerTitle: {
-    flex:       1,
-    fontFamily: "RalewayBold",
-    fontSize:   17,
-    color:      "#fff",
-    textAlign:  "center",
-    paddingHorizontal: 8,
-  },
-  headerRight: { width: 32 },
-
-  // Scroll
   scroll:        { flex: 1 },
-  scrollContent: { gap: 16, paddingBottom: 24 },
+  scrollContent: { gap: 16 },
 
-  // Image
-  imageWrap: {
-    width:  SCREEN_WIDTH,
-    height: 240,
-  },
-  image: { width: "100%", height: "100%" },
+  // ── Hero image ──────────────────────────────────────────────────────────
+  imageWrap: { width: SCREEN_WIDTH, height: 220 },
+  image:     { width: "100%", height: "100%" },
   imagePlaceholder: {
-    backgroundColor: colors.primary + "18",
+    backgroundColor: colors.primary + "15",
     alignItems:      "center",
     justifyContent:  "center",
   },
   imagePlaceholderIcon: { fontSize: 52 },
 
-  // Meta
+  // ── Recipe meta block ───────────────────────────────────────────────────
   metaSection: {
     paddingHorizontal: 20,
-    gap: 8,
+    gap:               8,
   },
   tags: {
     flexDirection: "row",
@@ -340,8 +528,8 @@ const styles = StyleSheet.create({
     gap:           8,
   },
   tag: {
-    backgroundColor: colors.primary,
-    borderRadius:    20,
+    backgroundColor:   colors.primary,
+    borderRadius:      20,
     paddingVertical:   4,
     paddingHorizontal: 12,
   },
@@ -353,49 +541,91 @@ const styles = StyleSheet.create({
   },
   recipeName: {
     fontFamily: "RalewayBold",
-    fontSize:   26,
-    color:      colors.textDark,
-    lineHeight: 32,
+    fontSize:   24,
+    color:      BRAND.teal,
+    lineHeight: 30,
+    marginTop:  2,
   },
   description: {
     fontFamily: "Raleway",
     fontSize:   14,
-    color:      "#888",
+    color:      BRAND.teal,
+    opacity:    0.7,
     lineHeight: 22,
   },
   author: {
     fontFamily:    "RalewayBold",
     fontSize:      12,
-    color:         "#bbb",
+    color:         BRAND.teal,
+    opacity:       0.5,
     letterSpacing: 0.3,
+    marginTop:     4,
   },
 
-  // Times
-  timesCard: { marginHorizontal: 20 },
-
-  // Tab content
+  // ── Tabbed content ──────────────────────────────────────────────────────
   tabContent: {
     paddingHorizontal: 20,
-    gap: 10,
+    gap:               10,
   },
   sectionLabel: {
     fontFamily:    "RalewayBold",
-    fontSize:      13,
-    color:         colors.textLight,
-    letterSpacing: 1,
+    fontSize:      11,
+    color:         BRAND.teal,
+    opacity:       0.5,
+    letterSpacing: 1.2,
     textTransform: "uppercase",
     marginBottom:  2,
   },
+  sectionDivider: {
+    height:          1,
+    backgroundColor: BRAND.border,
+    marginVertical:  6,
+  },
   yieldText: {
+    fontFamily:   "Raleway",
+    fontSize:     13,
+    color:        BRAND.teal,
+    opacity:      0.65,
+    marginBottom: 4,
+  },
+  emptyState: {
     fontFamily: "Raleway",
-    fontSize:   13,
-    color:      colors.textMid,
-    marginBottom: 2,
+    fontSize:   14,
+    color:      BRAND.teal,
+    opacity:    0.5,
+    fontStyle:  "italic",
   },
 
-  // Step cards
+  // ── Ingredients list ────────────────────────────────────────────────────
+  ingredientRow: {
+    flexDirection:   "row",
+    alignItems:      "flex-start",
+    gap:             12,
+    paddingVertical: 10,
+  },
+  ingredientRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BRAND.border,
+  },
+  ingredientDot: {
+    width:           7,
+    height:          7,
+    borderRadius:    4,
+    backgroundColor: colors.primary,
+    marginTop:       6,
+    flexShrink:      0,
+  },
+  ingredientText: {
+    flex:       1,
+    fontFamily: "Raleway",
+    fontSize:   15,
+    color:      BRAND.teal,
+    lineHeight: 22,
+  },
+
+  // ── Step cards ──────────────────────────────────────────────────────────
   stepCard: { padding: 14 },
-  stepRow: {
+  stepRow:  {
     flexDirection: "row",
     gap:           14,
     alignItems:    "flex-start",
@@ -418,38 +648,11 @@ const styles = StyleSheet.create({
     flex:       1,
     fontFamily: "Raleway",
     fontSize:   15,
-    color:      colors.textDark,
+    color:      BRAND.teal,
     lineHeight: 23,
   },
 
-  // Ingredient rows
-  ingredientRow: {
-    flexDirection:  "row",
-    alignItems:     "flex-start",
-    gap:            12,
-    paddingVertical: 10,
-  },
-  ingredientRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#f0ebe6",
-  },
-  ingredientDot: {
-    width:           7,
-    height:          7,
-    borderRadius:    4,
-    backgroundColor: colors.primary,
-    marginTop:       6,
-    flexShrink:      0,
-  },
-  ingredientText: {
-    flex:       1,
-    fontFamily: "Raleway",
-    fontSize:   15,
-    color:      colors.textDark,
-    lineHeight: 22,
-  },
-
-  // Sticky bottom
+  // ── Sticky bottom ───────────────────────────────────────────────────────
   stickyBottom: {
     position:          "absolute",
     bottom:            0,
@@ -459,18 +662,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop:        12,
     borderTopWidth:    1,
-    borderTopColor:    "#f0ebe6",
-    gap:               8,
-    elevation:         8,
-    shadowColor:       "#000",
-    shadowOffset:      { width: 0, height: -3 },
-    shadowOpacity:     0.06,
-    shadowRadius:      8,
+    borderTopColor:    BRAND.border,
+    elevation:         10,
+    shadowColor:       BRAND.teal,
+    shadowOffset:      { width: 0, height: -4 },
+    shadowOpacity:     0.08,
+    shadowRadius:      10,
   },
-  spinAgainBtn: { alignItems: "center", paddingVertical: 4 },
+  spinAgainBtn: {
+    alignItems:      "center",
+    paddingVertical: 8,
+    marginTop:       2,
+  },
   spinAgainLabel: {
-    fontFamily: "Raleway",
-    fontSize:   14,
-    color:      colors.textMid,
+    fontFamily:    "RalewaySemiBold",
+    fontSize:      13,
+    color:         BRAND.teal,
+    opacity:       0.55,
+    letterSpacing: 0.2,
   },
 });

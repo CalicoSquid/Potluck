@@ -1,15 +1,16 @@
 import React from "react";
-import { TouchableOpacity, StyleSheet, View, Text } from "react-native";
+import { TouchableOpacity, StyleSheet, View, Text, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "react-native-paper";
 import { colors as C } from "../constants/colors";
 
 /**
  * PotluckButton — mirrors Savor's GradientButton exactly.
- * No theme system; uses Potluck's fixed orange palette.
  *
  * Props:
- *   onPress, title, subtitle, icon (MCI icon name string),
+ *   onPress, title, subtitle,
+ *   icon        — MCI icon name string
+ *   imageIcon   — require()'d image source, renders instead of icon when provided
  *   gradientColors, shadowColor, loading, disabled
  */
 const TonightButton = ({
@@ -17,6 +18,7 @@ const TonightButton = ({
   title,
   subtitle,
   icon,
+  imageIcon,
   gradientColors = [C.gradientStart, C.gradientEnd],
   shadowColor    = C.gradientStart,
   loading        = false,
@@ -33,9 +35,13 @@ const TonightButton = ({
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      {/* Icon badge */}
+      {/* Icon badge — image or MCI icon */}
       <View style={styles.iconBadge}>
-        <Icon source={icon} size={24} color="#fff" />
+        {imageIcon ? (
+          <Image source={imageIcon} style={styles.imageIcon} resizeMode="contain" />
+        ) : (
+          <Icon source={icon} size={24} color="#fff" />
+        )}
       </View>
 
       {/* Text group */}
@@ -77,6 +83,10 @@ const styles = StyleSheet.create({
     alignItems:      "center",
     justifyContent:  "center",
     flexShrink:      0,
+  },
+  imageIcon: {
+    width:  28,
+    height: 28,
   },
   textGroup: {
     flex: 1,
