@@ -1,33 +1,34 @@
 export default {
   expo: {
-    name: "Tonight by Savor",
-    slug: "savor-tonight",
+    name: "Potluck",
+    slug: "potluck-by-savor",
+    owner: "calicosquid", 
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/tonight_icon.png",
+    icon: "./assets/playstore.png",
     userInterfaceStyle: "light",
     splash: {
-      image: "./assets/savor-tonight.png",
+      image: "./assets/potluck-splash.png",
       resizeMode: "contain",
       backgroundColor: "#fffefe",
     },
     ios: {
       supportsTablet: false,
-      bundleIdentifier: "com.calicosquid.savortonight",
+      bundleIdentifier: "com.calicosquid.savorpotluck",
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/tonight_icon.png",
+        foregroundImage: "./assets/playstore.png",
         backgroundColor: "#fffefe",
       },
-      package: "com.calicosquid.savortonight",
+      package: "com.calicosquid.savorpotluck",
     },
 
     plugins: ["expo-font"],
 
     extra: {
       eas: {
-        projectId: "f10e041e-6864-4c14-99ae-b189856d94fb",
+        projectId: "d98f6cca-5c80-42b3-93ae-bc5bce714533",
       },
     },
   },

@@ -1,12 +1,9 @@
 import React from "react";
-import { useFonts } from "expo-font";
 import { View, ActivityIndicator } from "react-native";
-import { ApolloProvider } from "@apollo/client";
-import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-
 import { SafeAreaProvider } from "react-native-safe-area-context";
-
+import { ApolloProvider } from "@apollo/client/react";
+import { useFonts } from "expo-font";
 import client from "./src/apollo/client";
 import RootNavigator from "./src/navigation/RootNavigator";
 import { colors } from "./src/constants/colors";
