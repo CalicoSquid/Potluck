@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   // ── Wordmark sits at the top, breathing room above the wheel ───────────
   wordmarkSlot: {
     paddingTop:    28,
-    paddingBottom: 4,
+    paddingBottom: 24,
     alignItems:    "center",
   },
 

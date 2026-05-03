@@ -5,7 +5,7 @@ export default {
     owner: "calicosquid", 
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/playstore.png",
+    icon: "./assets/playstore_2.png",
     userInterfaceStyle: "light",
     splash: {
       image: "./assets/potluck-splash.png",
@@ -18,7 +18,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/playstore.png",
+        foregroundImage: "./assets/playstore_2.png",
         backgroundColor: "#fffefe",
       },
       package: "com.calicosquid.savorpotluck",
