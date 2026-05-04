@@ -22,12 +22,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ── Brand palette — extracted from Savor logo, used throughout ───────────────
 const BRAND = {
-  teal:      "#142829",
-  tealDark:  "#0d1c1d",
+  teal: "#142829",
+  tealDark: "#0d1c1d",
   tealLight: "#1a3536",
-  green:     "#4caf50",
-  orange:    "#FF9800",
-  border:    "#f0ebe6",   // Savor warm border, the only "neutral" we use
+  green: "#4caf50",
+  orange: "#FF9800",
+  border: "#f0ebe6", // Savor warm border, the only "neutral" we use
 };
 
 // ── Inline times ─────────────────────────────────────────────────────────────
@@ -35,15 +35,15 @@ const BRAND = {
 const formatTime = (t) => {
   if (!t) return null;
   const parts = [];
-  if (t.hours   > 0) parts.push(`${t.hours}h`);
+  if (t.hours > 0) parts.push(`${t.hours}h`);
   if (t.minutes > 0) parts.push(`${t.minutes}m`);
   return parts.length ? parts.join(" ") : null;
 };
 
 const InlineTimes = ({ times }) => {
   const entries = [
-    { label: "Prep",  value: formatTime(times?.prep) },
-    { label: "Cook",  value: formatTime(times?.cook) },
+    { label: "Prep", value: formatTime(times?.prep) },
+    { label: "Cook", value: formatTime(times?.cook) },
     { label: "Total", value: formatTime(times?.total) },
   ].filter((e) => e.value);
   if (!entries.length) return null;
@@ -65,28 +65,28 @@ const InlineTimes = ({ times }) => {
 const inlineTimeStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems:    "center",
-    flexWrap:      "wrap",
-    gap:           8,
-    marginTop:     4,
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
   },
   dot: {
-    width:           3,
-    height:          3,
-    borderRadius:    2,
+    width: 3,
+    height: 3,
+    borderRadius: 2,
     backgroundColor: BRAND.orange,
-    opacity:         0.6,
+    opacity: 0.6,
   },
   label: {
     fontFamily: "RalewayBold",
-    fontSize:   12,
-    color:      colors.primary,
+    fontSize: 12,
+    color: colors.primary,
   },
   text: {
     fontFamily: "Raleway",
-    fontSize:   12,
-    color:      BRAND.teal,
-    opacity:    0.75,
+    fontSize: 12,
+    color: BRAND.teal,
+    opacity: 0.75,
   },
 });
 
@@ -101,14 +101,17 @@ const TabBar = ({ active, onChange }) => (
         onPress={() => onChange(tab)}
         activeOpacity={0.7}
       >
-        <Text style={[tabStyles.label, active === tab && tabStyles.labelActive]}>
+        <Text
+          style={[tabStyles.label, active === tab && tabStyles.labelActive]}
+        >
           {tab}
         </Text>
         {active === tab && (
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             style={tabStyles.indicator}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
           />
         )}
       </TouchableOpacity>
@@ -118,34 +121,34 @@ const TabBar = ({ active, onChange }) => (
 
 const tabStyles = StyleSheet.create({
   wrap: {
-    flexDirection:     "row",
+    flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: BRAND.border,
-    marginHorizontal:  20,
-    marginBottom:      4,
+    marginHorizontal: 20,
+    marginBottom: 4,
   },
   tab: {
-    flex:            1,
-    alignItems:      "center",
+    flex: 1,
+    alignItems: "center",
     paddingVertical: 12,
-    position:        "relative",
+    position: "relative",
   },
   label: {
     fontFamily: "RalewaySemiBold",
-    fontSize:   15,
-    color:      BRAND.teal,
-    opacity:    0.4,           // inactive — quiet but on-brand
+    fontSize: 15,
+    color: BRAND.teal,
+    opacity: 0.4, // inactive — quiet but on-brand
   },
   labelActive: {
-    color:   BRAND.teal,
+    color: BRAND.teal,
     opacity: 1,
   },
   indicator: {
-    position:     "absolute",
-    bottom:       -1,
-    left:         "20%",
-    right:        "20%",
-    height:       3,
+    position: "absolute",
+    bottom: -1,
+    left: "20%",
+    right: "20%",
+    height: 3,
     borderRadius: 2,
   },
 });
@@ -163,7 +166,7 @@ const IngredientList = ({ ingredients, recipeYield }) => (
           key={i}
           style={[
             styles.ingredientRow,
-            i < (ingredients.length - 1) && styles.ingredientRowBorder,
+            i < ingredients.length - 1 && styles.ingredientRowBorder,
           ]}
         >
           <View style={styles.ingredientDot} />
@@ -177,18 +180,83 @@ const IngredientList = ({ ingredients, recipeYield }) => (
 // ── Shop tab — checkable list + share ────────────────────────────────────────
 
 const UNITS = new Set([
-  "cup","cups","c","tbsp","tablespoon","tablespoons","tsp","teaspoon","teaspoons",
-  "oz","ounce","ounces","lb","lbs","pound","pounds","g","gram","grams","kg",
-  "ml","l","litre","litres","liter","liters","pint","pints","quart","quarts",
-  "gallon","gallons","fl","clove","cloves","slice","slices","piece","pieces",
-  "sprig","sprigs","bunch","handful","pinch","dash","drop","can","cans",
-  "jar","jars","package","pkg","bag","stick","head","stalk","stalks","sheet",
+  "cup",
+  "cups",
+  "c",
+  "tbsp",
+  "tablespoon",
+  "tablespoons",
+  "tsp",
+  "teaspoon",
+  "teaspoons",
+  "oz",
+  "ounce",
+  "ounces",
+  "lb",
+  "lbs",
+  "pound",
+  "pounds",
+  "g",
+  "gram",
+  "grams",
+  "kg",
+  "ml",
+  "l",
+  "litre",
+  "litres",
+  "liter",
+  "liters",
+  "pint",
+  "pints",
+  "quart",
+  "quarts",
+  "gallon",
+  "gallons",
+  "fl",
+  "clove",
+  "cloves",
+  "slice",
+  "slices",
+  "piece",
+  "pieces",
+  "sprig",
+  "sprigs",
+  "bunch",
+  "handful",
+  "pinch",
+  "dash",
+  "drop",
+  "can",
+  "cans",
+  "jar",
+  "jars",
+  "package",
+  "pkg",
+  "bag",
+  "stick",
+  "head",
+  "stalk",
+  "stalks",
+  "sheet",
 ]);
 
 const SKIP = new Set([
-  "water","salt","pepper","black pepper","white pepper","oil","olive oil",
-  "vegetable oil","cooking oil","cooking spray","spray","ice","ice cubes",
-  "to taste","as needed","as required",
+  "water",
+  "salt",
+  "pepper",
+  "black pepper",
+  "white pepper",
+  "oil",
+  "olive oil",
+  "vegetable oil",
+  "cooking oil",
+  "cooking spray",
+  "spray",
+  "ice",
+  "ice cubes",
+  "to taste",
+  "as needed",
+  "as required",
 ]);
 
 const parseIngredientName = (str) => {
@@ -196,10 +264,16 @@ const parseIngredientName = (str) => {
   s = s.split(/[,;]/)[0].trim();
   s = s.replace(/^[\d\s\/½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]+/, "").trim();
   const words = s.split(/\s+/);
-  if (words.length > 1 && UNITS.has(words[0].toLowerCase().replace(/\.$/, ""))) {
+  if (
+    words.length > 1 &&
+    UNITS.has(words[0].toLowerCase().replace(/\.$/, ""))
+  ) {
     s = words.slice(1).join(" ");
   }
-  s = s.replace(/^(large|medium|small|extra large|extra-large|big|tiny|fresh|dried|frozen|whole|ground|chopped|minced|sliced|diced|grated|shredded)\s+/i, "");
+  s = s.replace(
+    /^(large|medium|small|extra large|extra-large|big|tiny|fresh|dried|frozen|whole|ground|chopped|minced|sliced|diced|grated|shredded)\s+/i,
+    "",
+  );
   return s.trim();
 };
 
@@ -209,15 +283,21 @@ const shouldSkip = (str) => {
 };
 
 const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
-  const shopItems = React.useMemo(() => (ingredients || [])
-    .map((raw, originalIndex) => ({ raw, name: parseIngredientName(raw), originalIndex }))
-    .filter(({ raw }) => !shouldSkip(raw)),
-  [ingredients]);
+  const shopItems = React.useMemo(
+    () =>
+      (ingredients || [])
+        .map((raw, originalIndex) => ({
+          raw,
+          name: parseIngredientName(raw),
+          originalIndex,
+        }))
+        .filter(({ raw }) => !shouldSkip(raw)),
+    [ingredients],
+  );
 
   const [checked, setChecked] = useState({});
 
-  const toggle = (i) =>
-    setChecked((prev) => ({ ...prev, [i]: !prev[i] }));
+  const toggle = (i) => setChecked((prev) => ({ ...prev, [i]: !prev[i] }));
 
   const handleShare = () => {
     const lines = shopItems.map(({ name }) => `• ${name}`).join("\n");
@@ -228,7 +308,7 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
   };
 
   const checkedCount = Object.values(checked).filter(Boolean).length;
-  const total        = shopItems.length;
+  const total = shopItems.length;
 
   return (
     <View style={styles.tabContent}>
@@ -266,10 +346,17 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
             onPress={() => toggle(i)}
             activeOpacity={0.7}
           >
-            <View style={[shopStyles.checkbox, checked[i] && shopStyles.checkboxDone]}>
+            <View
+              style={[
+                shopStyles.checkbox,
+                checked[i] && shopStyles.checkboxDone,
+              ]}
+            >
               {checked[i] && <Icon source="check" size={14} color="#fff" />}
             </View>
-            <Text style={[shopStyles.itemText, checked[i] && shopStyles.itemDone]}>
+            <Text
+              style={[shopStyles.itemText, checked[i] && shopStyles.itemDone]}
+            >
               {name}
             </Text>
           </TouchableOpacity>
@@ -285,39 +372,39 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
 
 const shopStyles = StyleSheet.create({
   headerRow: {
-    flexDirection:  "row",
+    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems:     "flex-start",
+    alignItems: "flex-start",
   },
   shareBtn: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               5,
-    paddingVertical:   2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 2,
     paddingHorizontal: 10,
-    borderRadius:      20,
-    borderWidth:       1,
-    borderColor:       colors.primary + "40",
-    backgroundColor:   colors.primary + "0D",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.primary + "40",
+    backgroundColor: colors.primary + "0D",
   },
   shareLabel: {
     fontFamily: "RalewayBold",
-    fontSize:   12,
-    color:      colors.primary,
+    fontSize: 12,
+    color: colors.primary,
   },
   progress: {
     fontFamily: "Raleway",
-    fontSize:   12,
-    color:      BRAND.teal,
-    opacity:    0.55,
-    marginTop:  -4,
+    fontSize: 12,
+    color: BRAND.teal,
+    opacity: 0.55,
+    marginTop: -4,
   },
   listCard: { padding: 0 },
   row: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               14,
-    paddingVertical:   13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 13,
     paddingHorizontal: 16,
   },
   rowBorder: {
@@ -325,37 +412,37 @@ const shopStyles = StyleSheet.create({
     borderBottomColor: BRAND.border,
   },
   checkbox: {
-    width:           22,
-    height:          22,
-    borderRadius:    6,
-    borderWidth:     2,
-    borderColor:     BRAND.border,
-    flexShrink:      0,
-    alignItems:      "center",
-    justifyContent:  "center",
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: BRAND.border,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkboxDone: {
     backgroundColor: colors.primary,
-    borderColor:     colors.primary,
+    borderColor: colors.primary,
   },
   itemText: {
-    flex:       1,
+    flex: 1,
     fontFamily: "Raleway",
-    fontSize:   15,
-    color:      BRAND.teal,
+    fontSize: 15,
+    color: BRAND.teal,
     lineHeight: 22,
   },
   itemDone: {
-    color:              BRAND.teal,
-    opacity:            0.4,
+    color: BRAND.teal,
+    opacity: 0.4,
     textDecorationLine: "line-through",
   },
   allDone: {
     fontFamily: "RalewayBold",
-    fontSize:   13,
-    color:      colors.primary,
-    textAlign:  "center",
-    marginTop:  4,
+    fontSize: 13,
+    color: colors.primary,
+    textAlign: "center",
+    marginTop: 4,
   },
 });
 
@@ -367,6 +454,7 @@ export default function RecipeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
 
   const tags = [recipe.cuisine, recipe.category].filter(Boolean);
+  console.log("RecipeScreen", { recipe });
 
   const recipeUrl = `https://getsavor.recipes/r/${recipe.id}`;
 
@@ -377,7 +465,9 @@ export default function RecipeScreen({ navigation, route }) {
     // Falls back to Play Store if Savor isn't installed.
     const deepLink = `savor://create?url=${encodeURIComponent(recipeUrl)}`;
     Linking.openURL(deepLink).catch(() => {
-      Linking.openURL("https://play.google.com/store/apps/details?id=com.calicosquid.savorrecipes");
+      Linking.openURL(
+        "https://play.google.com/store/apps/details?id=com.calicosquid.savorrecipes",
+      );
     });
   };
 
@@ -387,23 +477,26 @@ export default function RecipeScreen({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-
       {/* ── Header ── */}
-      <PotluckHeader
-        onBack={() => navigation.goBack()}
-        spinCount={spinCount}
-      />
+      <PotluckHeader onBack={() => navigation.goBack()} spinCount={spinCount} />
 
       {/* ── Scroll body ── */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: stickyHeight + 24 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: stickyHeight + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero image */}
         {recipe.image ? (
           <View style={styles.imageWrap}>
-            <Image source={{ uri: recipe.image }} style={styles.image} resizeMode="cover" />
+            <Image
+              source={{ uri: recipe.image }}
+              style={styles.image}
+              resizeMode="cover"
+            />
           </View>
         ) : (
           <View style={[styles.imageWrap, styles.imagePlaceholder]}>
@@ -427,8 +520,22 @@ export default function RecipeScreen({ navigation, route }) {
             <Text style={styles.description}>{recipe.description}</Text>
           ) : null}
           <InlineTimes times={recipe.times} />
-          {recipe.user?.username ? (
-            <Text style={styles.author}>Shared by {recipe.user.username}</Text>
+          {recipe.sourceUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(recipe.sourceUrl).catch(() => {})}
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              style={styles.sourceRow}
+            >
+              <Icon source="web" size={11} color={BRAND.teal} />
+              <Text style={styles.sourceUrl} numberOfLines={1}>
+                {
+                  recipe.sourceUrl
+                    .replace(/^https?:\/\/(www\.)?/, "")
+                    .split("/")[0]
+                }
+              </Text>
+            </TouchableOpacity>
           ) : null}
         </View>
 
@@ -445,21 +552,26 @@ export default function RecipeScreen({ navigation, route }) {
             <View style={styles.sectionDivider} />
             <Text style={styles.sectionLabel}>Steps</Text>
             {(recipe.instructions || []).length === 0 ? (
-              <Text style={styles.emptyState}>No steps available for this recipe.</Text>
-            ) : (recipe.instructions || []).map((step, i) => (
-              <TonightCard key={i} style={styles.stepCard}>
-                <View style={styles.stepRow}>
-                  <LinearGradient
-                    colors={[colors.gradientStart, colors.gradientEnd]}
-                    style={styles.stepBadge}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  >
-                    <Text style={styles.stepNumber}>{i + 1}</Text>
-                  </LinearGradient>
-                  <Text style={styles.stepText}>{step}</Text>
-                </View>
-              </TonightCard>
-            ))}
+              <Text style={styles.emptyState}>
+                No steps available for this recipe.
+              </Text>
+            ) : (
+              (recipe.instructions || []).map((step, i) => (
+                <TonightCard key={i} style={styles.stepCard}>
+                  <View style={styles.stepRow}>
+                    <LinearGradient
+                      colors={[colors.gradientStart, colors.gradientEnd]}
+                      style={styles.stepBadge}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.stepNumber}>{i + 1}</Text>
+                    </LinearGradient>
+                    <Text style={styles.stepText}>{step}</Text>
+                  </View>
+                </TonightCard>
+              ))
+            )}
           </View>
         ) : (
           <ShopTab
@@ -472,7 +584,9 @@ export default function RecipeScreen({ navigation, route }) {
       </ScrollView>
 
       {/* ── Sticky bottom ── */}
-      <View style={[styles.stickyBottom, { paddingBottom: insets.bottom || 12 }]}>
+      <View
+        style={[styles.stickyBottom, { paddingBottom: insets.bottom || 12 }]}
+      >
         <TonightButton
           icon="check-bold"
           title="Cooked it!"
@@ -496,7 +610,6 @@ export default function RecipeScreen({ navigation, route }) {
           <Text style={styles.spinAgainLabel}>← Back to spinning</Text>
         </TouchableOpacity>
       </View>
-
     </View>
   );
 }
@@ -504,103 +617,103 @@ export default function RecipeScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.offWhite },
 
-  scroll:        { flex: 1 },
+  scroll: { flex: 1 },
   scrollContent: { gap: 16 },
 
   // ── Hero image ──────────────────────────────────────────────────────────
   imageWrap: { width: SCREEN_WIDTH, height: 220 },
-  image:     { width: "100%", height: "100%" },
+  image: { width: "100%", height: "100%" },
   imagePlaceholder: {
     backgroundColor: colors.primary + "15",
-    alignItems:      "center",
-    justifyContent:  "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
   imagePlaceholderIcon: { fontSize: 52 },
 
   // ── Recipe meta block ───────────────────────────────────────────────────
   metaSection: {
     paddingHorizontal: 20,
-    gap:               8,
+    gap: 8,
   },
   tags: {
     flexDirection: "row",
-    flexWrap:      "wrap",
-    gap:           8,
+    flexWrap: "wrap",
+    gap: 8,
   },
   tag: {
-    backgroundColor:   colors.primary,
-    borderRadius:      20,
-    paddingVertical:   4,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+    paddingVertical: 4,
     paddingHorizontal: 12,
   },
   tagText: {
-    fontFamily:    "RalewayBold",
-    fontSize:      11,
-    color:         "#fff",
+    fontFamily: "RalewayBold",
+    fontSize: 11,
+    color: "#fff",
     letterSpacing: 0.5,
   },
   recipeName: {
     fontFamily: "RalewayBold",
-    fontSize:   24,
-    color:      BRAND.teal,
+    fontSize: 24,
+    color: BRAND.teal,
     lineHeight: 30,
-    marginTop:  2,
+    marginTop: 2,
   },
   description: {
     fontFamily: "Raleway",
-    fontSize:   14,
-    color:      BRAND.teal,
-    opacity:    0.7,
+    fontSize: 14,
+    color: BRAND.teal,
+    opacity: 0.7,
     lineHeight: 22,
   },
   author: {
-    fontFamily:    "RalewayBold",
-    fontSize:      12,
-    color:         BRAND.teal,
-    opacity:       0.5,
+    fontFamily: "RalewayBold",
+    fontSize: 12,
+    color: BRAND.teal,
+    opacity: 0.5,
     letterSpacing: 0.3,
-    marginTop:     4,
+    marginTop: 4,
   },
 
   // ── Tabbed content ──────────────────────────────────────────────────────
   tabContent: {
     paddingHorizontal: 20,
-    gap:               10,
+    gap: 10,
   },
   sectionLabel: {
-    fontFamily:    "RalewayBold",
-    fontSize:      11,
-    color:         BRAND.teal,
-    opacity:       0.5,
+    fontFamily: "RalewayBold",
+    fontSize: 11,
+    color: BRAND.teal,
+    opacity: 0.5,
     letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginBottom:  2,
+    marginBottom: 2,
   },
   sectionDivider: {
-    height:          1,
+    height: 1,
     backgroundColor: BRAND.border,
-    marginVertical:  6,
+    marginVertical: 6,
   },
   yieldText: {
-    fontFamily:   "Raleway",
-    fontSize:     13,
-    color:        BRAND.teal,
-    opacity:      0.65,
+    fontFamily: "Raleway",
+    fontSize: 13,
+    color: BRAND.teal,
+    opacity: 0.65,
     marginBottom: 4,
   },
   emptyState: {
     fontFamily: "Raleway",
-    fontSize:   14,
-    color:      BRAND.teal,
-    opacity:    0.5,
-    fontStyle:  "italic",
+    fontSize: 14,
+    color: BRAND.teal,
+    opacity: 0.5,
+    fontStyle: "italic",
   },
 
   // ── Ingredients list ────────────────────────────────────────────────────
   ingredientRow: {
-    flexDirection:   "row",
-    alignItems:      "flex-start",
-    gap:             12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
     paddingVertical: 10,
   },
   ingredientRowBorder: {
@@ -608,77 +721,92 @@ const styles = StyleSheet.create({
     borderBottomColor: BRAND.border,
   },
   ingredientDot: {
-    width:           7,
-    height:          7,
-    borderRadius:    4,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: colors.primary,
-    marginTop:       6,
-    flexShrink:      0,
+    marginTop: 6,
+    flexShrink: 0,
   },
   ingredientText: {
-    flex:       1,
+    flex: 1,
     fontFamily: "Raleway",
-    fontSize:   15,
-    color:      BRAND.teal,
+    fontSize: 15,
+    color: BRAND.teal,
     lineHeight: 22,
   },
 
   // ── Step cards ──────────────────────────────────────────────────────────
   stepCard: { padding: 14 },
-  stepRow:  {
+  stepRow: {
     flexDirection: "row",
-    gap:           14,
-    alignItems:    "flex-start",
+    gap: 14,
+    alignItems: "flex-start",
   },
   stepBadge: {
-    width:          30,
-    height:         30,
-    borderRadius:   10,
-    alignItems:     "center",
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
     justifyContent: "center",
-    flexShrink:     0,
-    marginTop:      2,
+    flexShrink: 0,
+    marginTop: 2,
   },
   stepNumber: {
     fontFamily: "RalewayBold",
-    fontSize:   13,
-    color:      "#fff",
+    fontSize: 13,
+    color: "#fff",
   },
   stepText: {
-    flex:       1,
+    flex: 1,
     fontFamily: "Raleway",
-    fontSize:   15,
-    color:      BRAND.teal,
+    fontSize: 15,
+    color: BRAND.teal,
     lineHeight: 23,
   },
 
   // ── Sticky bottom ───────────────────────────────────────────────────────
   stickyBottom: {
-    position:          "absolute",
-    bottom:            0,
-    left:              0,
-    right:             0,
-    backgroundColor:   "#fff",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
     paddingHorizontal: 20,
-    paddingTop:        12,
-    borderTopWidth:    1,
-    borderTopColor:    BRAND.border,
-    elevation:         10,
-    shadowColor:       BRAND.teal,
-    shadowOffset:      { width: 0, height: -4 },
-    shadowOpacity:     0.08,
-    shadowRadius:      10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: BRAND.border,
+    elevation: 10,
+    shadowColor: BRAND.teal,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
   },
   spinAgainBtn: {
-    alignItems:      "center",
+    alignItems: "center",
     paddingVertical: 8,
-    marginTop:       2,
+    marginTop: 2,
   },
   spinAgainLabel: {
-    fontFamily:    "RalewaySemiBold",
-    fontSize:      13,
-    color:         BRAND.teal,
-    opacity:       0.55,
+    fontFamily: "RalewaySemiBold",
+    fontSize: 13,
+    color: BRAND.teal,
+    opacity: 0.55,
     letterSpacing: 0.2,
+  },
+  sourceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 2,
+    opacity: 0.45,
+  },
+  sourceUrl: {
+    flex: 1,
+    fontFamily: "Raleway",
+    fontSize: 11,
+    color: BRAND.teal,
+    letterSpacing: 0.1,
+    textDecorationLine: "underline",
   },
 });

@@ -11,8 +11,6 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import SplashTransition from "./src/components/SplashTransition";
 
 // Keep the native splash up until we explicitly hide it.
-// Without this, the OS hides the native splash as soon as the JS bundle
-// starts running — well before our content is ready to paint.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
@@ -24,13 +22,10 @@ export default function App() {
     RalewaySemiBold: require("./assets/fonts/Raleway-SemiBold.ttf"),
   });
 
-  // The JS splash only mounts once fonts are ready (or failed to load).
-  // While we're waiting, the native splash stays up — no gray gap.
   const fontsReady = fontsLoaded || !!fontError;
 
-  // Called by SplashTransition once it has painted its first frame.
-  // ONLY THEN do we hide the native splash. This guarantees zero gap
-  // between native splash and JS splash.
+  // Called by SplashTransition on its first onLayout — hides the native splash
+  // the moment the JS white background is painted, eliminating the gray gap.
   const handleSplashReady = useCallback(async () => {
     try {
       await SplashScreen.hideAsync();
@@ -42,10 +37,14 @@ export default function App() {
   return (
     <View style={{ flex: 1, backgroundColor: "#fffefe" }}>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#fffefe" }}>
-        {fontsReady && !splashDone && (
+
+        {/* Mount immediately so the white bg kills the gray gap.
+            The animation inside waits for fontsReady before starting. */}
+        {!splashDone && (
           <SplashTransition
             onReadyToPaint={handleSplashReady}
             onDone={() => setSplashDone(true)}
+            fontsReady={fontsReady}
           />
         )}
 
@@ -56,6 +55,7 @@ export default function App() {
             </ApolloProvider>
           </SafeAreaProvider>
         )}
+
       </GestureHandlerRootView>
     </View>
   );

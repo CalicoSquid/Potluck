@@ -12,25 +12,26 @@ import * as Haptics from "expo-haptics";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
 
-// ── Sizing — matched to Android 12+ icon-mode native splash ──────────────────
+// ── Sizing — matched to native splash ────────────────────────────────────────
 //
-// Two knobs to dial in alignment on device:
+// The native splash uses Android 12+ icon-mode rendering. With imageWidth: 200
+// in app.config.js, the native splash logo is exactly 200dp wide and centered
+// on screen. The JS splash mounts at the EXACT same size and position, so the
+// handoff is invisible — same image, same place.
 //
-//   LOGO_SIZE        — the *settled* JS logo size (after entrance animation)
-//   ENTRANCE_SCALE   — the *initial* scale on mount, before settle
+// Then the logo translates upward to make room for the reel below.
 //
-// LOGO_SIZE × ENTRANCE_SCALE should roughly match the native splash size.
-// The settle animation absorbs any mismatch as motion.
+// All JS-only — tweak in dev, no rebuild needed.
 
-const LOGO_SIZE       = SCREEN_WIDTH * 0.48;
-const ENTRANCE_SCALE  = 1.18;
-const CENTER_OFFSET_Y = -90;   // pulled up from centre to make room for the reel + tagline
+const LOGO_SIZE       = 200;   // matches native splash imageWidth (dp)
+const LOGO_REST_Y     = 0;     // start position — dead center, matches native splash
+const LOGO_LIFTED_Y   = -120;  // settled position — pulled up to make room for reel + tagline
 
 // ── Reel sizing ──────────────────────────────────────────────────────────────
 
 const REEL_WIDTH       = 130;
 const REEL_HEIGHT      = 110;
-const REEL_BOTTOM_GAP  = SCREEN_HEIGHT < 750 ? 180 : 230;
+const REEL_BOTTOM_GAP  = SCREEN_HEIGHT < 750 ? 200 : 260;
 
 // ── Brand palette ────────────────────────────────────────────────────────────
 
@@ -55,46 +56,51 @@ const SPIN_SYMBOLS = [
 const SPIN_INTERVAL_START = 55;
 const SPIN_INTERVAL_END   = 200;
 const SPIN_DURATION       = 1100;   // total cycling time before lock
-const REEL_START_DELAY    = 320;    // wait for logo settle before reel kicks in
+const LOGO_HOLD           = 220;    // hold logo at center after handoff before lifting
+const LOGO_LIFT_DURATION  = 480;    // logo's upward translation duration
+const REEL_START_DELAY    = LOGO_HOLD + 200;  // reel kicks in mid-lift
 
 /**
  * SplashTransition — slot-machine themed splash.
  *
- * The hero moment is a single reel cycling through food emojis, slowing,
- * and locking onto the Savor logo. Teaches the app's core mechanic before
- * the user has tapped anything.
+ * The handoff trick: the JS logo mounts at the EXACT size and position of
+ * the native splash logo (200dp, centered), so when the native splash hides,
+ * the user just sees the same logo continuing. Then the JS logo translates
+ * upward, the reel slides in below, the slot machine cycles, locks, and
+ * the tagline appears.
  *
  * Sequence:
- *   t=0     : mount, logo enters, native splash hides via onLayout
- *   t=320   : reel begins cycling
- *   t=1420  : reel locks on savor-logo (scale pop, haptic, glow flash)
- *   t=1620  : "Spin for your Supper" words stagger in below
- *   t=2300  : container fades out
- *   t=2700  : onDone — app mounts
+ *   t=0     : mount, logo centered (matches native splash exactly)
+ *   t=220   : logo begins lifting upward
+ *   t=420   : reel begins fading in + cycling
+ *   t=1520  : reel locks on savor-logo (scale pop, haptic, glow flash)
+ *   t=1720  : "Spin for your Supper" words stagger in below
+ *   t=2400  : container fades out
+ *   t=2820  : onDone — app mounts
  */
 const SplashTransition = ({ onReadyToPaint, onDone }) => {
 
   // Container fade
   const containerOpacity = useRef(new Animated.Value(1)).current;
 
-  // Logo entrance scale
-  const logoScale = useRef(new Animated.Value(ENTRANCE_SCALE)).current;
+  // Logo translation — starts centered, lifts upward
+  const logoY = useRef(new Animated.Value(LOGO_REST_Y)).current;
 
-  // Reel container fade-in (reel appears slightly after the logo settles)
+  // Reel fade-in + slide-up
   const reelOpacity = useRef(new Animated.Value(0)).current;
-  const reelY       = useRef(new Animated.Value(8)).current;
+  const reelY       = useRef(new Animated.Value(12)).current;
 
-  // Reel lock animation — scale pop on landing
+  // Reel lock — scale pop on landing
   const lockScale = useRef(new Animated.Value(1)).current;
 
   // Reel glow flash on landing
   const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Reel content state — cycling emoji or null for locked
+  // Reel content state
   const [spinSymbol, setSpinSymbol] = useState(SPIN_SYMBOLS[0]);
   const [locked, setLocked] = useState(false);
 
-  // Word fade-up
+  // Tagline word stagger
   const word1Opacity = useRef(new Animated.Value(0)).current;
   const word2Opacity = useRef(new Animated.Value(0)).current;
   const word3Opacity = useRef(new Animated.Value(0)).current;
@@ -141,7 +147,6 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
   const lockReel = () => {
     setLocked(true);
 
-    // Scale pop — overshoots slightly then settles
     lockScale.setValue(0.84);
     Animated.spring(lockScale, {
       toValue:         1,
@@ -150,7 +155,6 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
       useNativeDriver: true,
     }).start();
 
-    // Glow flash
     Animated.sequence([
       Animated.timing(glowAnim, { toValue: 1, duration: 60,  useNativeDriver: true }),
       Animated.timing(glowAnim, { toValue: 0, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -158,46 +162,46 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
 
-    // Words begin coming in 200ms after the lock punch
     setTimeout(() => {
       Animated.stagger(140, [
         wordAnim(word1Opacity, word1Y),
         wordAnim(word2Opacity, word2Y),
         wordAnim(word3Opacity, word3Y),
       ]).start(() => {
-        // Hold for a beat after the last word lands, then fade out
         setTimeout(fadeOut, 260);
       });
     }, 200);
   };
 
-  // ── Cycling logic ──────────────────────────────────────────────────────
+  // ── Main animation ────────────────────────────────────────────────────
   useEffect(() => {
-    // Logo entrance settle
-    Animated.timing(logoScale, {
-      toValue:         1,
-      duration:        520,
-      easing:          Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+    // Logo lift — after a brief hold at the native-splash position
+    const liftTimer = setTimeout(() => {
+      Animated.timing(logoY, {
+        toValue:         LOGO_LIFTED_Y,
+        duration:        LOGO_LIFT_DURATION,
+        easing:          Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }, LOGO_HOLD);
 
-    // Reel fade-in
+    // Reel appears as the logo is lifting
     const reelAppearTimer = setTimeout(() => {
       Animated.parallel([
         Animated.timing(reelOpacity, {
           toValue:         1,
-          duration:        260,
+          duration:        300,
           easing:          Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.timing(reelY, {
           toValue:         0,
-          duration:        300,
+          duration:        340,
           easing:          Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start();
-    }, REEL_START_DELAY - 80);
+    }, REEL_START_DELAY);
 
     // Cycling — recursive setTimeout that decelerates over SPIN_DURATION
     const tickRef = { current: null };
@@ -207,7 +211,6 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
     const tick = () => {
       tickCount++;
 
-      // Pick next symbol, avoid trivial repeats
       setSpinSymbol(prev => {
         let next;
         do {
@@ -216,28 +219,26 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
         return next;
       });
 
-      // Light haptic every few ticks (not every frame, would be overwhelming)
       if (tickCount % 3 === 0) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       }
 
-      // Compute next interval — eases from FAST to SLOW over the duration
       const progress = Math.min(tickCount / totalTicks, 1);
       const interval = SPIN_INTERVAL_START + (SPIN_INTERVAL_END - SPIN_INTERVAL_START) * progress;
 
       if (progress < 1) {
         tickRef.current = setTimeout(tick, interval);
       } else {
-        // Done cycling — lock onto the logo
         lockReel();
       }
     };
 
     const startCyclingTimer = setTimeout(() => {
       tickRef.current = setTimeout(tick, SPIN_INTERVAL_START);
-    }, REEL_START_DELAY);
+    }, REEL_START_DELAY + 80);
 
     return () => {
+      clearTimeout(liftTimer);
       clearTimeout(reelAppearTimer);
       clearTimeout(startCyclingTimer);
       clearTimeout(tickRef.current);
@@ -250,17 +251,17 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
       onLayout={handleLayout}
       pointerEvents="none"
     >
-      {/* ── Logo — sized + positioned to match native splash handoff ── */}
+      {/* ── Logo — mounts at native splash position, then lifts ── */}
       <View style={styles.logoWrap} pointerEvents="none">
         <Animated.Image
           source={require("../../assets/potluck-splash.png")}
-          style={[styles.logo, { transform: [{ scale: logoScale }] }]}
+          style={[styles.logo, { transform: [{ translateY: logoY }] }]}
           resizeMode="contain"
           fadeDuration={0}
         />
       </View>
 
-      {/* ── Slot reel — the centerpiece ── */}
+      {/* ── Slot reel ── */}
       <Animated.View
         style={[
           styles.reelWrap,
@@ -289,7 +290,6 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
               <Text style={styles.spinEmoji}>{spinSymbol}</Text>
             )}
 
-            {/* Glow flash on lock */}
             <Animated.View
               pointerEvents="none"
               style={[
@@ -302,14 +302,13 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
               ]}
             />
 
-            {/* Recessed top/bottom shadows for the slot machine window feel */}
             <View style={styles.innerShadowTop} />
             <View style={styles.innerShadowBottom} />
           </View>
         </Animated.View>
       </Animated.View>
 
-      {/* ── Tagline — comes in after the reel locks ── */}
+      {/* ── Tagline ── */}
       <View style={styles.tagline}>
         <Animated.Text
           style={[
@@ -357,7 +356,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems:     "center",
     justifyContent: "center",
-    transform:      [{ translateY: CENTER_OFFSET_Y }],
   },
   logo: {
     width:  LOGO_SIZE,
@@ -381,16 +379,9 @@ const styles = StyleSheet.create({
     borderColor:     BRAND.border,
     padding:         3,
     position:        "relative",
-    // No elevation/shadow — Android's elevation shadow doesn't fade with
-    // opacity, leaving a ghosted halo after the splash fades out. The
-    // border + warm bg + glow flash are sufficient definition.
   },
   reelLocked: {
     borderColor: BRAND.orange + "90",
-    // No elevation/shadow change here — Android's elevation shadow doesn't
-    // fade in sync with opacity, leaving a ghosted shadow halo after the
-    // card itself fades. The scale pop + glow flash + border colour change
-    // are plenty of emphasis on lock.
   },
   notch: {
     position:               "absolute",
@@ -444,14 +435,14 @@ const styles = StyleSheet.create({
 
   // ── Tagline ───────────────────────────────────────────────────────────
   tagline: {
-    position:      "absolute",
-    bottom:        REEL_BOTTOM_GAP - 76,
-    left:          0,
-    right:         0,
-    flexDirection: "row",
-    alignItems:    "baseline",
-    justifyContent:"center",
-    gap:           7,
+    position:       "absolute",
+    bottom:         REEL_BOTTOM_GAP - 76,
+    left:           0,
+    right:          0,
+    flexDirection:  "row",
+    alignItems:     "baseline",
+    justifyContent: "center",
+    gap:            7,
   },
   wordSpin: {
     fontSize:      20,

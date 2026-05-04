@@ -95,7 +95,7 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const RANDOM_RECIPE = gql`
   query RandomRecipe($excludeIds: [ID]) {
     randomRecipe(excludeIds: $excludeIds) {
-      id name description image ingredients instructions
+      id name description image ingredients instructions sourceUrl
       recipeYield category cuisine
       times {
         cook { hours minutes }

@@ -1,23 +1,33 @@
+// EAS automatically sets EAS_BUILD_PROFILE to the profile name (development,
+// preview, production) when running `eas build`. We use it here to vary the
+// app name and package so dev and prod builds can be installed side-by-side
+// on the same device without conflict.
+const IS_DEV = process.env.EAS_BUILD_PROFILE === "development";
+
 export default {
   expo: {
-    name: "Potluck",
-    slug: "potluck-by-savor",
-    owner: "calicosquid",
-    version: "1.0.0",
-    orientation: "portrait",
-    icon: "./assets/playstore_2.png",
+    name:               IS_DEV ? "Potluck (Dev)" : "Potluck",
+    slug:               "potluck-by-savor",
+    owner:              "calicosquid",
+    version:            "1.0.0",
+    orientation:        "portrait",
+    icon:               "./assets/playstore_2.png",
     userInterfaceStyle: "light",
 
     ios: {
-      supportsTablet: false,
-      bundleIdentifier: "com.calicosquid.savorpotluck",
+      supportsTablet:   false,
+      bundleIdentifier: IS_DEV
+        ? "com.calicosquid.savorpotluck.dev"
+        : "com.calicosquid.savorpotluck",
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/playstore_2.png",
         backgroundColor: "#fffefe",
       },
-      package: "com.calicosquid.savorpotluck",
+      package: IS_DEV
+        ? "com.calicosquid.savorpotluck.dev"
+        : "com.calicosquid.savorpotluck",
     },
 
     plugins: [
@@ -28,18 +38,18 @@ export default {
           image:           "./assets/potluck-splash.png",
           resizeMode:      "contain",
           backgroundColor: "#fffefe",
-          // Android-specific overrides — same image / colour, but explicitly
-          // declared so the activity window background is also painted.
-          // This is what eliminates the gray flash on Expo 54.
+          imageWidth:      200,
           android: {
             image:           "./assets/potluck-splash.png",
             resizeMode:      "contain",
             backgroundColor: "#fffefe",
+            imageWidth:      200,
           },
           ios: {
             image:           "./assets/potluck-splash.png",
             resizeMode:      "contain",
             backgroundColor: "#fffefe",
+            imageWidth:      200,
           },
         },
       ],
