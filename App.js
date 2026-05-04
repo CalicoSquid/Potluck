@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ApolloProvider } from "@apollo/client/react";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import * as Updates from "expo-updates";
 
 import client from "./src/apollo/client";
 import RootNavigator from "./src/navigation/RootNavigator";
@@ -23,6 +24,17 @@ export default function App() {
   });
 
   const fontsReady = fontsLoaded || !!fontError;
+
+  useEffect(() => {
+  if (__DEV__) return;
+  Updates.checkForUpdateAsync().then((update) => {
+    if (update.isAvailable) {
+      Updates.fetchUpdateAsync().then(() => {
+        Updates.reloadAsync();
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+}, []);
 
   // Called by SplashTransition on its first onLayout — hides the native splash
   // the moment the JS white background is painted, eliminating the gray gap.

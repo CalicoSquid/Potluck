@@ -9,6 +9,8 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  Modal,
+  Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLazyQuery } from "@apollo/client/react";
@@ -23,24 +25,30 @@ import PotluckHeader from "../components/PotluckHeader";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // Wordmark is 532x150 — aspect ~3.55. Sized to a comfortable width.
-const WORDMARK_WIDTH  = SCREEN_WIDTH * 0.62;
+const WORDMARK_WIDTH = SCREEN_WIDTH * 0.62;
 const WORDMARK_ASPECT = 532 / 150;
 const WORDMARK_HEIGHT = WORDMARK_WIDTH / WORDMARK_ASPECT;
 
-const LOGO_SIZE     = SCREEN_WIDTH * 0.72;
-const SPINNER_SIZE  = LOGO_SIZE * 0.72;
-const MAX_SPINS     = 3;
+const LOGO_SIZE = SCREEN_WIDTH * 0.72;
+const SPINNER_SIZE = LOGO_SIZE * 0.72;
+const MAX_SPINS = 3;
 const SPIN_DURATION = 1800;
-const STORAGE_KEY   = "potluck_session";
+const STORAGE_KEY = "potluck_session";
 
-const REEL_GAP    = 10;
-const REEL_WIDTH  = (SCREEN_WIDTH - 32 - REEL_GAP * 2) / 3;
+const REEL_GAP = 10;
+const REEL_WIDTH = (SCREEN_WIDTH - 32 - REEL_GAP * 2) / 3;
 const REEL_HEIGHT = 84;
 
-// How long the scroll-up animation takes
-const REEL_ANIM_MS   = 700;
-// Pause after landing before nav fires — let user see the result
-const REEL_HOLD_MS   = 500;
+const REEL_ANIM_MS = 700;
+const REEL_HOLD_MS = 500;
+
+// ── Brand palette ─────────────────────────────────────────────────────────────
+
+const BRAND = {
+  teal: "#142829",
+  green: "#4caf50",
+  orange: "#FF9800",
+};
 
 // ── Copy pools ────────────────────────────────────────────────────────────────
 
@@ -88,6 +96,36 @@ const CAP_CHEEKS = [
   "Even professional chefs pick from three.",
 ];
 
+// ── Confirm modal copy — cheeky but with the save nudge ──────────────────────
+
+const RESET_HEADLINES = [
+  "Throwing it all away?",
+  "Walking away from these?",
+  "Really? These look great.",
+  "Starting fresh, are we?",
+];
+
+const RESET_SUBS = [
+  "Save any of these to Savor first — they're gone if you reset.",
+  "These recipes don't come back. Save a favourite to Savor before you bail.",
+  "Once you reset, the wheel forgets everything. Worth saving one first?",
+  "The wheel has no memory. Save to Savor, then reset guilt-free.",
+];
+
+const RESET_CONFIRM = [
+  "Yeah, spin again",
+  "Ditch them and spin",
+  "Fresh spin, please",
+  "Reset, I'm sure",
+];
+
+const RESET_CANCEL = [
+  "Actually, keep them",
+  "Wait, I'll stay",
+  "No, hold on",
+  "Keep my recipes",
+];
+
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // ── GraphQL ───────────────────────────────────────────────────────────────────
@@ -95,52 +133,193 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const RANDOM_RECIPE = gql`
   query RandomRecipe($excludeIds: [ID]) {
     randomRecipe(excludeIds: $excludeIds) {
-      id name description image ingredients instructions sourceUrl
-      recipeYield category cuisine
+      id
+      name
+      description
+      image
+      ingredients
+      instructions
+      recipeYield
+      category
+      cuisine
+      sourceUrl
       times {
-        cook { hours minutes }
-        prep { hours minutes }
-        total { hours minutes }
+        cook {
+          hours
+          minutes
+        }
+        prep {
+          hours
+          minutes
+        }
+        total {
+          hours
+          minutes
+        }
       }
     }
   }
 `;
 
-// ── Brand palette extracted from the Savor logo asset ────────────────────────
-// Dark teal #142829, Savor green #4caf50, orange #ff9f13, warm cream #ffeacb
-// These live in the logo itself — we honour them, not fight them.
-
-const BRAND = {
-  teal:   "#142829",   // logo outline / dark text
-  green:  "#4caf50",   // logo leaf accent
-  orange: "#FF9800",   // Savor primary gradient end
-};
-
-// Per-reel accent colours — orange → green → teal
-// Cycles through brand palette. Small detail, intentional personality.
 const NOTCH_COLORS = [BRAND.orange, BRAND.green, BRAND.teal];
 
-// ── Reel symbol pool ──────────────────────────────────────────────────────────
-
 const SPIN_SYMBOLS = [
-  "🍳","🥗","🍝","🍕","🍔","🍜","🥘","🍱","🌮",
-  "🥐","🍣","🍲","🥩","🍰","🦞","🌯","🍛","🫕",
+  "🍳",
+  "🥗",
+  "🍝",
+  "🍕",
+  "🍔",
+  "🍜",
+  "🥘",
+  "🍱",
+  "🌮",
+  "🥐",
+  "🍣",
+  "🍲",
+  "🥩",
+  "🍰",
+  "🦞",
+  "🌯",
+  "🍛",
+  "🫕",
 ];
 
-const SPIN_INTERVAL_START = 55;   // ms — peak speed
-const SPIN_INTERVAL_END   = 190;  // ms — just before snap
+const SPIN_INTERVAL_START = 55;
+const SPIN_INTERVAL_END = 190;
+
+// ── Confirm Reset Modal ───────────────────────────────────────────────────────
+
+const ConfirmResetModal = ({ visible, onConfirm, onCancel, hasRecipes }) => {
+  const [copy] = useState(() => ({
+    headline: pick(RESET_HEADLINES),
+    sub: pick(RESET_SUBS),
+    confirm: pick(RESET_CONFIRM),
+    cancel: pick(RESET_CANCEL),
+  }));
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onCancel}
+    >
+      <Pressable style={modalStyles.backdrop} onPress={onCancel}>
+        <Pressable style={modalStyles.sheet} onPress={() => {}}>
+          {/* Orange notch at top */}
+          <View style={modalStyles.notch} />
+
+          <Text style={modalStyles.headline}>{copy.headline}</Text>
+          <Text style={modalStyles.sub}>{copy.sub}</Text>
+
+          {/* Confirm — teal, subdued — this is the destructive action */}
+          <TouchableOpacity
+            style={modalStyles.confirmBtn}
+            onPress={onConfirm}
+            activeOpacity={0.75}
+          >
+            <Text style={modalStyles.confirmLabel}>{copy.confirm}</Text>
+          </TouchableOpacity>
+
+          {/* Cancel — orange gradient — primary, encourage them to stay */}
+          <TouchableOpacity
+            style={modalStyles.cancelBtn}
+            onPress={onCancel}
+            activeOpacity={0.8}
+          >
+            <Text style={modalStyles.cancelLabel}>{copy.cancel}</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
+
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(20,40,41,0.55)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 28,
+    paddingTop: 20,
+    paddingBottom: 40,
+    gap: 14,
+  },
+  notch: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: BRAND.orange + "60",
+    marginBottom: 8,
+  },
+  headline: {
+    fontFamily: "RalewayBold",
+    fontSize: 22,
+    color: BRAND.teal,
+    textAlign: "center",
+    lineHeight: 28,
+  },
+  sub: {
+    fontFamily: "Raleway",
+    fontSize: 14,
+    color: BRAND.teal,
+    opacity: 0.65,
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: 6,
+  },
+  // Cancel = orange = encouraged action
+  cancelBtn: {
+    backgroundColor: BRAND.orange,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  cancelLabel: {
+    fontFamily: "RalewayBold",
+    fontSize: 16,
+    color: "#ffffff",
+  },
+  // Confirm = teal ghost = destructive but available
+  confirmBtn: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: BRAND.teal + "30",
+  },
+  confirmLabel: {
+    fontFamily: "RalewayBold",
+    fontSize: 15,
+    color: BRAND.teal,
+    opacity: 0.6,
+  },
+});
 
 // ── Slot reel ─────────────────────────────────────────────────────────────────
 
-const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
-  const lockAnim  = useRef(new Animated.Value(1)).current;
-  const glowAnim  = useRef(new Animated.Value(0)).current;
-  const nameFade  = useRef(new Animated.Value(recipe ? 1 : 0)).current;
+const SlotReel = ({
+  recipe,
+  isSpinning,
+  isActiveReel,
+  index,
+  onPress,
+  onLocked,
+}) => {
+  const lockAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const nameFade = useRef(new Animated.Value(recipe ? 1 : 0)).current;
   const lockedRef = useRef(!!recipe);
 
   const [spinSymbol, setSpinSymbol] = useState(null);
 
-  // Cycle symbols while this slot is the active spin target
   useEffect(() => {
     if (!isSpinning || lockedRef.current) return;
 
@@ -150,14 +329,23 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
 
     const tick = () => {
       step++;
-      setSpinSymbol(prev => {
+      setSpinSymbol((prev) => {
         let next;
-        do { next = SPIN_SYMBOLS[Math.floor(Math.random() * SPIN_SYMBOLS.length)]; }
-        while (next === prev && SPIN_SYMBOLS.length > 1);
+        do {
+          next = SPIN_SYMBOLS[Math.floor(Math.random() * SPIN_SYMBOLS.length)];
+        } while (next === prev && SPIN_SYMBOLS.length > 1);
         return next;
       });
+
+      // Only fire haptics from the one reel that's actually active
+      if (isActiveReel && step % 3 === 0) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
+
       const progress = Math.min(step / totalSteps, 1);
-      const delay = SPIN_INTERVAL_START + (SPIN_INTERVAL_END - SPIN_INTERVAL_START) * progress;
+      const delay =
+        SPIN_INTERVAL_START +
+        (SPIN_INTERVAL_END - SPIN_INTERVAL_START) * progress;
       tickRef.current = setTimeout(tick, delay);
     };
 
@@ -165,7 +353,6 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
     return () => clearTimeout(tickRef.current);
   }, [isSpinning]);
 
-  // Recipe landed — snap to logo + fire animations
   useEffect(() => {
     if (!recipe) {
       lockedRef.current = false;
@@ -179,41 +366,50 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
     lockedRef.current = true;
     setSpinSymbol(null);
 
-    // Scale pop — overshoots slightly then settles
     lockAnim.setValue(0.84);
     Animated.spring(lockAnim, {
-      toValue: 1, friction: 3.5, tension: 340, useNativeDriver: true,
+      toValue: 1,
+      friction: 3.5,
+      tension: 340,
+      useNativeDriver: true,
     }).start();
 
-    // Orange flash — brief, not garish
     Animated.sequence([
-      Animated.timing(glowAnim, { toValue: 1, duration: 60,  useNativeDriver: true }),
-      Animated.timing(glowAnim, { toValue: 0, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 420,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
     ]).start();
 
-    // Name rises in below
     Animated.timing(nameFade, {
-      toValue: 1, duration: 280, delay: 200,
-      easing: Easing.out(Easing.quad), useNativeDriver: true,
+      toValue: 1,
+      duration: 280,
+      delay: 200,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
     }).start();
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setTimeout(() => onLocked?.(), REEL_HOLD_MS);
   }, [recipe?.id]);
 
-  const isFilled    = !!recipe;
+  const isFilled = !!recipe;
   const isActiveReel = isSpinning && !lockedRef.current;
-  const notchColor  = NOTCH_COLORS[index];
-
-  // ── Window content — three clean states ──────────────────────────────────
+  const notchColor = NOTCH_COLORS[index];
 
   const windowContent = (() => {
-
-    // LOCKED — white card, full-colour Savor icon, no gradients
     if (isFilled) {
       return (
-        <Animated.View style={[reelStyles.logoWrap, { transform: [{ scale: lockAnim }] }]}>
-          {/* Orange flash overlay on landing */}
+        <Animated.View
+          style={[reelStyles.logoWrap, { transform: [{ scale: lockAnim }] }]}
+        >
           <Animated.View
             pointerEvents="none"
             style={[
@@ -221,7 +417,10 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
               {
                 backgroundColor: BRAND.orange,
                 borderRadius: 10,
-                opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.22] }),
+                opacity: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.22],
+                }),
               },
             ]}
           />
@@ -233,8 +432,6 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
         </Animated.View>
       );
     }
-
-    // SPINNING — white, big emoji tumbling
     if (isActiveReel && spinSymbol) {
       return (
         <View style={reelStyles.spinWindow}>
@@ -242,8 +439,6 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
         </View>
       );
     }
-
-    // IDLE — white, dark teal question mark, clean
     return (
       <View style={reelStyles.idleWindow}>
         <Text style={reelStyles.idleQ}>?</Text>
@@ -251,12 +446,7 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
     );
   })();
 
-  // ── Frame — white card, no colour until filled ────────────────────────────
-
-  const frameStyle = [
-    reelStyles.frame,
-    isFilled && reelStyles.frameFilled,
-  ];
+  const frameStyle = [reelStyles.frame, isFilled && reelStyles.frameFilled];
 
   if (!isFilled) {
     return (
@@ -272,11 +462,14 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
 
   return (
     <View style={reelStyles.column}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={frameStyle}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.8}
+        style={frameStyle}
+      >
         <View style={[reelStyles.notch, { backgroundColor: notchColor }]} />
         <View style={reelStyles.window}>{windowContent}</View>
       </TouchableOpacity>
-
       <Animated.Text
         style={[reelStyles.nameStrip, { opacity: nameFade }]}
         numberOfLines={2}
@@ -288,152 +481,134 @@ const SlotReel = ({ recipe, isSpinning, index, onPress, onLocked }) => {
 };
 
 const reelStyles = StyleSheet.create({
-  // Column so name strip flows naturally below the card
   column: {
-    width:      REEL_WIDTH,
+    width: REEL_WIDTH,
     alignItems: "center",
   },
-
-  // White card — pure Savor DNA, no colored borders
   frame: {
-    width:           REEL_WIDTH,
-    height:          REEL_HEIGHT,
-    borderRadius:    16,
+    width: REEL_WIDTH,
+    height: REEL_HEIGHT,
+    borderRadius: 16,
     backgroundColor: "#ffffff",
-    borderWidth:     1,
-    borderColor:     "#f0ebe6",      // Savor warm border, no gray
-    padding:         3,
-    elevation:       2,
-    shadowColor:     "#1a1a1a",
-    shadowOffset:    { width: 0, height: 2 },
-    shadowOpacity:   0.08,
-    shadowRadius:    6,
-    position:        "relative",
+    borderWidth: 1,
+    borderColor: "#f0ebe6",
+    padding: 3,
+    elevation: 2,
+    shadowColor: "#1a1a1a",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    position: "relative",
   },
-
-  // Filled card — lift it, teal shadow for depth
   frameFilled: {
-    elevation:     5,
-    shadowColor:   BRAND.teal,
+    elevation: 5,
+    shadowColor: BRAND.teal,
     shadowOpacity: 0.16,
-    shadowRadius:  10,
-    shadowOffset:  { width: 0, height: 4 },
-    borderColor:   "#f0ebe6",
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    borderColor: "#f0ebe6",
   },
-
-  // Accent tab — left edge, per-reel brand colour
   notch: {
-    position:               "absolute",
-    left:                   0,
-    top:                    12,
-    bottom:                 12,
-    width:                  3,
-    borderTopRightRadius:   2,
-    borderBottomRightRadius:2,
-    zIndex:                 2,
+    position: "absolute",
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+    zIndex: 2,
   },
-
-  // Inner window — borderRadius matches frame minus padding
   window: {
-    flex:            1,
-    borderRadius:    13,
-    overflow:        "hidden",
+    flex: 1,
+    borderRadius: 13,
+    overflow: "hidden",
     backgroundColor: "#ffffff",
   },
-
-  // IDLE — white bg, dark teal ?
   idleWindow: {
-    flex:           1,
-    alignItems:     "center",
+    flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    backgroundColor:"#ffffff",
+    backgroundColor: "#ffffff",
   },
   idleQ: {
     fontFamily: "RalewayBold",
-    fontSize:   30,
-    color:      BRAND.teal,
-    opacity:    0.35,
+    fontSize: 30,
+    color: BRAND.teal,
+    opacity: 0.35,
   },
-
-  // SPINNING — white bg, emoji pops cleanly on white
   spinWindow: {
-    flex:           1,
-    alignItems:     "center",
+    flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    backgroundColor:"#ffffff",
+    backgroundColor: "#ffffff",
   },
   spinEmoji: {
-    fontSize:   32,
+    fontSize: 32,
     lineHeight: 38,
   },
-
-  // LOCKED — white bg, logo centred, no gradient
   logoWrap: {
-    flex:           1,
-    alignItems:     "center",
+    flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    backgroundColor:"#ffffff",
-    borderRadius:   13,
-    overflow:       "hidden",
+    backgroundColor: "#ffffff",
+    borderRadius: 13,
+    overflow: "hidden",
   },
   lockedLogo: {
-    width:  REEL_HEIGHT * 0.62,
+    width: REEL_HEIGHT * 0.62,
     height: REEL_HEIGHT * 0.62,
   },
-
-  // Recipe name — dark teal, bold, below the card
   nameStrip: {
-    fontFamily:    "RalewayBold",
-    fontSize:      10,
-    color:         BRAND.teal,
-    marginTop:     6,
-    textAlign:     "center",
+    fontFamily: "RalewayBold",
+    fontSize: 10,
+    color: BRAND.teal,
+    marginTop: 6,
+    textAlign: "center",
     letterSpacing: 0.1,
-    lineHeight:    13,
-    width:         "100%",
-    minHeight:     26,   // 2 lines reserved — no layout jump
+    lineHeight: 13,
+    width: "100%",
+    minHeight: 26,
   },
-
-  // Placeholder when empty — matches nameStrip height
   namePlaceholder: {
-    height: 32,  // nameStrip minHeight + marginTop
+    height: 32,
   },
 });
-
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function SpinScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [spinCount,      setSpinCount]      = useState(0);
-  const [seenIds,        setSeenIds]        = useState([]);
-  const [phase,          setPhase]          = useState("idle");
-  const [slots,          setSlots]          = useState([null, null, null]);
+  const [spinCount, setSpinCount] = useState(0);
+  const [seenIds, setSeenIds] = useState([]);
+  const [phase, setPhase] = useState("idle");
+  const [slots, setSlots] = useState([null, null, null]);
   const [displayedCount, setDisplayedCount] = useState(0);
-  // Pending nav — held until reel animation completes
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+
   const pendingNav = useRef(null);
 
   const [copy, setCopy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
-    idleSubline:  pick(IDLE_SUBLINES),
-    midHeadline:  pick(MID_HEADLINES),
-    midSubline:   pick(MID_SUBLINES(MAX_SPINS - 1)),
-    capHeadline:  pick(CAP_HEADLINES),
-    capCheek:     pick(CAP_CHEEKS),
+    idleSubline: pick(IDLE_SUBLINES),
+    midHeadline: pick(MID_HEADLINES),
+    midSubline: pick(MID_SUBLINES(MAX_SPINS - 1)),
+    capHeadline: pick(CAP_HEADLINES),
+    capCheek: pick(CAP_CHEEKS),
   }));
 
-  const scaleAnim       = useRef(new Animated.Value(1)).current;
-  const spinAnim        = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
   const currentRotation = useRef(0);
 
-  // Entry animation — demo spin on mount
+  // Entry animation
   useEffect(() => {
     const t = setTimeout(() => {
       const demoTarget = 2.4 * 360;
       Animated.timing(spinAnim, {
-        toValue:  demoTarget,
+        toValue: demoTarget,
         duration: 1400,
-        easing:   Easing.out(Easing.cubic),
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
       currentRotation.current = demoTarget;
@@ -444,26 +619,32 @@ export default function SpinScreen({ navigation }) {
 
   // Restore session
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (!raw) return;
-      try {
-        const session = JSON.parse(raw);
-        if (session.slots && session.spinCount > 0) {
-          setSlots(session.slots);
-          setSpinCount(session.spinCount);
-          setDisplayedCount(session.spinCount);
-          setSeenIds(session.seenIds || []);
-          setPhase(session.spinCount >= MAX_SPINS ? "softCap" : "revealed");
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        try {
+          const session = JSON.parse(raw);
+          if (session.slots && session.spinCount > 0) {
+            setSlots(session.slots);
+            setSpinCount(session.spinCount);
+            setDisplayedCount(session.spinCount);
+            setSeenIds(session.seenIds || []);
+            setPhase(session.spinCount >= MAX_SPINS ? "softCap" : "revealed");
+          }
+        } catch (_) {
+          // Corrupt session — clear it so it doesn't persist
+          AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
         }
-      } catch (_) {}
-    });
+      })
+      .catch(() => {
+        // AsyncStorage read failure — start fresh silently
+      });
   }, []);
 
   const [fetchRecipe, { loading }] = useLazyQuery(RANDOM_RECIPE, {
     fetchPolicy: "no-cache",
   });
 
-  // Called by SlotReel once its lock animation + hold is done
   const handleReelLocked = useCallback(() => {
     if (pendingNav.current) {
       const nav = pendingNav.current;
@@ -472,97 +653,149 @@ export default function SpinScreen({ navigation }) {
     }
   }, [navigation]);
 
-  const handleReset = useCallback(() => {
+  const doReset = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    AsyncStorage.removeItem(STORAGE_KEY);
+    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
     pendingNav.current = null;
     setSpinCount(0);
     setSeenIds([]);
     setDisplayedCount(0);
     setSlots([null, null, null]);
     setPhase("idle");
+    setErrorMsg(null);
+    setResetModalVisible(false);
     setCopy({
       idleHeadline: pick(IDLE_HEADLINES),
-      idleSubline:  pick(IDLE_SUBLINES),
-      midHeadline:  pick(MID_HEADLINES),
-      midSubline:   pick(MID_SUBLINES(MAX_SPINS - 1)),
-      capHeadline:  pick(CAP_HEADLINES),
-      capCheek:     pick(CAP_CHEEKS),
+      idleSubline: pick(IDLE_SUBLINES),
+      midHeadline: pick(MID_HEADLINES),
+      midSubline: pick(MID_SUBLINES(MAX_SPINS - 1)),
+      capHeadline: pick(CAP_HEADLINES),
+      capCheek: pick(CAP_CHEEKS),
     });
+  }, []);
+
+  const handleReset = useCallback(() => {
+    // Always confirm — even at softCap, they might want to save a recipe first
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setResetModalVisible(true);
   }, []);
 
   const handleSpin = useCallback(() => {
     if (phase === "spinning" || loading) return;
 
+    setErrorMsg(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPhase("spinning");
 
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.94, duration: 100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1,    duration: 220, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.94,
+        duration: 100,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.back(2)),
+        useNativeDriver: true,
+      }),
     ]).start();
 
     const fetchPromise = fetchRecipe({ variables: { excludeIds: seenIds } });
-    const extraSpins   = 4 + Math.random();
-    const targetDeg    = currentRotation.current + extraSpins * 360;
+    const extraSpins = 4 + Math.random();
+    const targetDeg = currentRotation.current + extraSpins * 360;
     currentRotation.current = targetDeg;
 
     const animPromise = new Promise((resolve) => {
       Animated.timing(spinAnim, {
-        toValue: targetDeg, duration: SPIN_DURATION,
-        easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        toValue: targetDeg,
+        duration: SPIN_DURATION,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
       }).start(resolve);
     });
 
-    Promise.all([fetchPromise, animPromise]).then(([{ data, error }]) => {
-      if (error) {
-        console.log("❌ error:", JSON.stringify(error));
+    Promise.all([fetchPromise, animPromise])
+      .then(([{ data, error }]) => {
+        if (error) {
+          setPhase(spinCount > 0 ? "revealed" : "idle");
+          setErrorMsg(
+            "Couldn't reach the server. Check your connection and try again.",
+          );
+          return;
+        }
+        const recipe = data?.randomRecipe;
+        if (!recipe) {
+          setPhase(spinCount > 0 ? "revealed" : "idle");
+          setErrorMsg("No recipe came back — give it another spin.");
+          return;
+        }
+
+        setErrorMsg(null);
+        const nextCount = spinCount + 1;
+        const nextSeen = [...seenIds, recipe.id];
+        const nextSlots = slots.map((s, i) =>
+          i === nextCount - 1 ? recipe : s,
+        );
+        const isCap = nextCount >= MAX_SPINS;
+
+        setSeenIds(nextSeen);
+        setSpinCount(nextCount);
+        setDisplayedCount(nextCount);
+        setSlots(nextSlots);
+        setPhase(isCap ? "softCap" : "revealed");
+
+        if (!isCap)
+          setCopy((prev) => ({
+            ...prev,
+            midSubline: pick(MID_SUBLINES(MAX_SPINS - nextCount)),
+          }));
+
+        AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            slots: nextSlots,
+            spinCount: nextCount,
+            seenIds: nextSeen,
+          }),
+        ).catch(() => {});
+
+        pendingNav.current = {
+          recipe,
+          spinCount: nextCount,
+          seenIds: nextSeen,
+          isLast: false,
+        };
+      })
+      .catch(() => {
         setPhase(spinCount > 0 ? "revealed" : "idle");
-        return;
-      }
-      const recipe = data?.randomRecipe;
-      if (!recipe) { setPhase(spinCount > 0 ? "revealed" : "idle"); return; }
-
-      const nextCount = spinCount + 1;
-      const nextSeen  = [...seenIds, recipe.id];
-      const nextSlots = slots.map((s, i) => i === nextCount - 1 ? recipe : s);
-      const isCap     = nextCount >= MAX_SPINS;
-
-      setSeenIds(nextSeen);
-      setSpinCount(nextCount);
-      setDisplayedCount(nextCount);
-      setSlots(nextSlots);
-      setPhase(isCap ? "softCap" : "revealed");
-
-      if (!isCap) setCopy(prev => ({ ...prev, midSubline: pick(MID_SUBLINES(MAX_SPINS - nextCount)) }));
-
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ slots: nextSlots, spinCount: nextCount, seenIds: nextSeen }));
-
-      // Store nav params — SlotReel will fire it after its animation
-      pendingNav.current = { recipe, spinCount: nextCount, seenIds: nextSeen, isLast: false };
-
-    }).catch((err) => {
-      console.log("❌ catch:", JSON.stringify(err));
-      setPhase(spinCount > 0 ? "revealed" : "idle");
-    });
+        setErrorMsg("Something went wrong. Give it another spin.");
+      });
   }, [phase, loading, seenIds, spinCount, slots]);
 
-  const spinRotate = spinAnim.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"] });
+  const spinRotate = spinAnim.interpolate({
+    inputRange: [0, 360],
+    outputRange: ["0deg", "360deg"],
+  });
 
   const isSpinning = phase === "spinning";
-  const isSoftCap  = phase === "softCap";
-  const hasSpun    = displayedCount > 0;
-  const headline   = hasSpun && !isSoftCap ? copy.midHeadline : copy.idleHeadline;
-  const subline    = hasSpun && !isSoftCap ? copy.midSubline  : copy.idleSubline;
+  const isSoftCap = phase === "softCap";
+  const hasSpun = displayedCount > 0;
+  const headline = hasSpun && !isSoftCap ? copy.midHeadline : copy.idleHeadline;
+  const subline = hasSpun && !isSoftCap ? copy.midSubline : copy.idleSubline;
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="dark-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       <PotluckHeader spinCount={displayedCount} />
 
       <View style={styles.body}>
-
         {/* ── Wordmark ── */}
         <View style={styles.wordmarkSlot}>
           <Image
@@ -577,13 +810,16 @@ export default function SpinScreen({ navigation }) {
           <View style={styles.wheelShadow}>
             <Animated.Image
               source={require("../../assets/spinner.png")}
-              style={[styles.spinnerImg, {
-                width:     SPINNER_SIZE,
-                height:    SPINNER_SIZE,
-                top:       (LOGO_SIZE - SPINNER_SIZE) / 1.4,
-                left:      (LOGO_SIZE - SPINNER_SIZE) / 2,
-                transform: [{ rotate: spinRotate }],
-              }]}
+              style={[
+                styles.spinnerImg,
+                {
+                  width: SPINNER_SIZE,
+                  height: SPINNER_SIZE,
+                  top: (LOGO_SIZE - SPINNER_SIZE) / 1.4,
+                  left: (LOGO_SIZE - SPINNER_SIZE) / 2,
+                  transform: [{ rotate: spinRotate }],
+                },
+              ]}
               resizeMode="contain"
             />
             <Image
@@ -594,36 +830,52 @@ export default function SpinScreen({ navigation }) {
           </View>
         </View>
 
-        {/* ── Messaging — fixed height to prevent reflow ── */}
+        {/* ── Messaging — fixed height, error state lives here ── */}
         <View style={styles.messaging}>
-          <Text style={styles.headline} numberOfLines={1}>
-            {isSoftCap ? copy.capHeadline : headline}
-          </Text>
-          <Text style={styles.subline} numberOfLines={2}>
-            {isSoftCap ? copy.capCheek : subline}
-          </Text>
+          {errorMsg ? (
+            <Text style={styles.errorText} numberOfLines={2}>
+              {errorMsg}
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.headline} numberOfLines={1}>
+                {isSoftCap ? copy.capHeadline : headline}
+              </Text>
+              <Text style={styles.subline} numberOfLines={2}>
+                {isSoftCap ? copy.capCheek : subline}
+              </Text>
+            </>
+          )}
         </View>
 
         {/* ── Slot machine reels ── */}
         <View style={styles.reelsMachine}>
           <View style={styles.reelsRow}>
             <View style={styles.winLine} />
+
             {slots.map((recipe, i) => (
               <SlotReel
                 key={i}
                 index={i}
                 recipe={recipe}
                 isSpinning={isSpinning}
+                isActiveReel={isSpinning && i === spinCount} // ← add this
                 onLocked={handleReelLocked}
-                onPress={() => recipe && navigation.navigate("Recipe", {
-                  recipe, spinCount, seenIds, isLast: false,
-                })}
+                onPress={() =>
+                  recipe &&
+                  navigation.navigate("Recipe", {
+                    recipe,
+                    spinCount,
+                    seenIds,
+                    isLast: false,
+                  })
+                }
               />
             ))}
           </View>
         </View>
 
-        {/* ── CTA slot — fixed height, holds button OR reset link ── */}
+        {/* ── CTA slot ── */}
         <View style={styles.ctaSlot}>
           {isSoftCap ? (
             <TouchableOpacity
@@ -635,14 +887,18 @@ export default function SpinScreen({ navigation }) {
               <Text style={styles.resetLabel}>← Start over</Text>
             </TouchableOpacity>
           ) : (
-            <Animated.View style={[styles.ctaWrap, { transform: [{ scale: scaleAnim }] }]}>
+            <Animated.View
+              style={[styles.ctaWrap, { transform: [{ scale: scaleAnim }] }]}
+            >
               <TonightButton
                 icon="dice-multiple"
                 title={hasSpun ? "Spin again" : "Spin"}
                 subtitle={
-                  isSpinning ? "The wheel decides…"
-                    : hasSpun ? "Get another random recipe"
-                    : "Get a random community recipe"
+                  isSpinning
+                    ? "The wheel decides…"
+                    : hasSpun
+                      ? "Get another random recipe"
+                      : "Get a random community recipe"
                 }
                 onPress={handleSpin}
                 loading={isSpinning}
@@ -656,143 +912,143 @@ export default function SpinScreen({ navigation }) {
           style={[styles.footer, { marginBottom: Math.max(insets.bottom, 12) }]}
           numberOfLines={1}
         >
-          Recipes by the Savor community
+          Powered by Savor
         </Text>
       </View>
+
+      {/* ── Confirm reset modal ── */}
+      <ConfirmResetModal
+        visible={resetModalVisible}
+        onConfirm={doReset}
+        onCancel={() => setResetModalVisible(false)}
+        hasRecipes={hasSpun}
+      />
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-//
-// Layout philosophy: deliberate vertical rhythm, no flex spacers.
-// Each section has a fixed slot so toggling between Spin / Start over
-// states does not cause the page to reflow.
-//
-// Spacing scale: 8 / 12 / 16 / 20 / 24
-
 const styles = StyleSheet.create({
   root: {
-    flex:            1,
+    flex: 1,
     backgroundColor: colors.offWhite,
   },
   body: {
-    flex:              1,
-    alignItems:        "center",
+    flex: 1,
+    alignItems: "center",
     paddingHorizontal: 16,
   },
 
-  // ── Wordmark sits at the top, breathing room above the wheel ───────────
   wordmarkSlot: {
-    paddingTop:    28,
+    paddingTop: 28,
     paddingBottom: 24,
-    alignItems:    "center",
+    alignItems: "center",
   },
 
-  // ── Wheel container — fixed dimensions so layout below it is stable ────
   wheelSlot: {
-    width:          LOGO_SIZE,
-    height:         LOGO_SIZE,
-    alignItems:     "center",
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    alignItems: "center",
     justifyContent: "center",
   },
   wheelShadow: {
-    width:         LOGO_SIZE,
-    height:        LOGO_SIZE,
-    position:      "relative",
-    elevation:     12,
-    shadowColor:   "#142829",
-    shadowOffset:  { width: 0, height: 8 },
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    position: "relative",
+    elevation: 12,
+    shadowColor: "#142829",
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
-    shadowRadius:  18,
+    shadowRadius: 18,
   },
   spinnerImg: { position: "absolute" },
 
-  // ── Messaging — fixed height for a stable headline/subline pair ────────
-  // 28 (headline lineHeight) + 4 (gap) + 36 (2 lines of subline) = 68
+  // Fixed height — error msg or headline/subline, no reflow
   messaging: {
-    height:            68,
-    width:             "100%",
-    alignItems:        "center",
-    justifyContent:    "center",
+    height: 68,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 8,
-    marginTop:         12,
-    marginBottom:      4,
+    marginTop: 12,
+    marginBottom: 4,
   },
   headline: {
     fontFamily: "RalewayBold",
-    fontSize:   22,
+    fontSize: 22,
     lineHeight: 28,
-    color:      "#142829",
-    textAlign:  "center",
+    color: "#142829",
+    textAlign: "center",
   },
   subline: {
     fontFamily: "Raleway",
-    fontSize:   14,
+    fontSize: 14,
     lineHeight: 18,
-    color:      "#142829",
-    opacity:    0.55,
-    textAlign:  "center",
-    marginTop:  4,
+    color: "#142829",
+    opacity: 0.55,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  errorText: {
+    fontFamily: "RalewayBold",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#c0392b",
+    textAlign: "center",
+    opacity: 0.85,
   },
 
-  // ── Reels ───────────────────────────────────────────────────────────────
   reelsMachine: {
-    width:        "100%",
-    marginTop:    8,
+    width: "100%",
+    marginTop: 8,
     marginBottom: 20,
   },
   reelsRow: {
-    flexDirection:  "row",
-    gap:            REEL_GAP,
-    position:       "relative",
+    flexDirection: "row",
+    gap: REEL_GAP,
+    position: "relative",
     justifyContent: "center",
   },
-  // Win line — single thin orange thread
   winLine: {
-    position:        "absolute",
-    left:            -4,
-    right:           -4,
-    top:             REEL_HEIGHT / 2 - 0.5,
-    height:          1,
+    position: "absolute",
+    left: -4,
+    right: -4,
+    top: REEL_HEIGHT / 2 - 0.5,
+    height: 1,
     backgroundColor: "#FF9800",
-    opacity:         0.28,
-    zIndex:          0,
-    pointerEvents:   "none",
+    opacity: 0.28,
+    zIndex: 0,
+    pointerEvents: "none",
   },
 
-  // ── CTA slot — fixed height holds either button or reset link ──────────
-  // TonightButton with marginVertical:8 + 16 padding × 2 + ~46 content ≈ 96
   ctaSlot: {
-    width:          "100%",
-    height:         96,
+    width: "100%",
+    height: 96,
     justifyContent: "center",
-    alignItems:     "center",
-    marginTop:      "auto",   // push to bottom of available space
+    alignItems: "center",
+    marginTop: "auto",
   },
   ctaWrap: {
     width: "100%",
   },
   resetBtn: {
-    paddingVertical:   12,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius:      14,
+    borderRadius: 14,
   },
   resetLabel: {
-    fontFamily:    "RalewayBold",
-    fontSize:      15,
-    color:         "#142829",
+    fontFamily: "RalewayBold",
+    fontSize: 15,
+    color: "#142829",
     letterSpacing: 0.2,
   },
 
-  // ── Footer ──────────────────────────────────────────────────────────────
   footer: {
-    fontFamily:    "Raleway",
-    fontSize:      11,
-    color:         "#142829",
-    opacity:       0.4,
-    marginTop:     6,
+    fontFamily: "Raleway",
+    fontSize: 11,
+    color: "#142829",
+    opacity: 0.4,
+    marginTop: 6,
     letterSpacing: 0.4,
-    textAlign:     "center",
+    textAlign: "center",
   },
 });

@@ -14,6 +14,19 @@ export default {
     icon:               "./assets/playstore_2.png",
     userInterfaceStyle: "light",
 
+    // ── OTA Updates ────────────────────────────────────────────────────────
+    // runtimeVersion ties updates to the native build they were compiled
+    // against. appVersion means a new native build = new update channel.
+    // Dev builds are excluded — they use local Metro, not EAS Update.
+    runtimeVersion: {
+      policy: "appVersion",
+    },
+    updates: {
+      url: "https://u.expo.dev/d98f6cca-5c80-42b3-93ae-bc5bce714533",
+      enabled: !IS_DEV,
+      fallbackToCacheTimeout: 0,
+    },
+
     ios: {
       supportsTablet:   false,
       bundleIdentifier: IS_DEV
@@ -32,6 +45,7 @@ export default {
 
     plugins: [
       "expo-font",
+      "expo-updates",
       [
         "expo-splash-screen",
         {

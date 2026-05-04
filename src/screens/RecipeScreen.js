@@ -454,7 +454,6 @@ export default function RecipeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
 
   const tags = [recipe.cuisine, recipe.category].filter(Boolean);
-  console.log("RecipeScreen", { recipe });
 
   const recipeUrl = `https://getsavor.recipes/r/${recipe.id}`;
 

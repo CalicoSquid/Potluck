@@ -56,7 +56,7 @@ const SPIN_SYMBOLS = [
 const SPIN_INTERVAL_START = 55;
 const SPIN_INTERVAL_END   = 200;
 const SPIN_DURATION       = 1100;   // total cycling time before lock
-const LOGO_HOLD           = 220;    // hold logo at center after handoff before lifting
+const LOGO_HOLD           = 600;    // hold logo at center after handoff before lifting
 const LOGO_LIFT_DURATION  = 480;    // logo's upward translation duration
 const REEL_START_DELAY    = LOGO_HOLD + 200;  // reel kicks in mid-lift
 
