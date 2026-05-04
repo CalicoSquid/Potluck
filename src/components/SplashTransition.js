@@ -78,8 +78,7 @@ const REEL_START_DELAY    = LOGO_HOLD + 200;  // reel kicks in mid-lift
  *   t=2400  : container fades out
  *   t=2820  : onDone — app mounts
  */
-const SplashTransition = ({ onReadyToPaint, onDone }) => {
-
+const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
   // Container fade
   const containerOpacity = useRef(new Animated.Value(1)).current;
 
@@ -175,6 +174,8 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
 
   // ── Main animation ────────────────────────────────────────────────────
   useEffect(() => {
+    if (!fontsReady) return;
+
     // Logo lift — after a brief hold at the native-splash position
     const liftTimer = setTimeout(() => {
       Animated.timing(logoY, {
@@ -243,7 +244,7 @@ const SplashTransition = ({ onReadyToPaint, onDone }) => {
       clearTimeout(startCyclingTimer);
       clearTimeout(tickRef.current);
     };
-  }, []);
+  }, [fontsReady]);
 
   return (
     <Animated.View

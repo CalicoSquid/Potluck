@@ -12,11 +12,13 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "env": {
         "EXPO_PUBLIC_APOLLO_URI": "https://savor-app-server-gql-production.up.railway.app"
       }
     },
     "production": {
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_APOLLO_URI": "https://savor-app-server-gql-production.up.railway.app"
       }

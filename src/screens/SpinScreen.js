@@ -401,7 +401,7 @@ const SlotReel = ({
   }, [recipe?.id]);
 
   const isFilled = !!recipe;
-  const isActiveReel = isSpinning && !lockedRef.current;
+  const isShowingActive = isSpinning && !lockedRef.current;
   const notchColor = NOTCH_COLORS[index];
 
   const windowContent = (() => {
@@ -432,7 +432,7 @@ const SlotReel = ({
         </Animated.View>
       );
     }
-    if (isActiveReel && spinSymbol) {
+    if (isShowingActive && spinSymbol) {
       return (
         <View style={reelStyles.spinWindow}>
           <Text style={reelStyles.spinEmoji}>{spinSymbol}</Text>
