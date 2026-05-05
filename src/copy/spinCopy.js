@@ -14,7 +14,7 @@ export const IDLE_HEADLINES = [
 export const IDLE_SUBLINES = [
   "No scrolling. No deciding. Just cook.",
   "One spin. One recipe. Done.",
-  "The community picked it. You cook it.",
+  "The universe picked it. You cook it.",
   "Dinner sorted in seconds.",
 ];
 
@@ -43,7 +43,7 @@ export const CAP_CHEEKS = [
   "Surely one of those will do?",
   "The wheel tried its best.",
   "Three great options right there.",
-  "Even professional chefs pick from three.",
+  "You dare defy the universe?",
 ];
 
 // ── Reset modal copy ──────────────────────────────────────────────────────────
