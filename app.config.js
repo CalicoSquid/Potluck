@@ -33,6 +33,7 @@ export default {
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
     },
+
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/playstore_2.png",
@@ -41,6 +42,12 @@ export default {
       package: IS_DEV
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
+      // Increment this for every Play Store build submission.
+      versionCode: 1,
+      // Potluck needs no sensitive permissions — no camera, storage, or contacts.
+      // Explicit empty array strips the default RN permission set and keeps
+      // the Play Store install prompt clean.
+      permissions: [],
     },
 
     plugins: [

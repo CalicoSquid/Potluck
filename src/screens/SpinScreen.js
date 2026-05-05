@@ -17,12 +17,14 @@ import { useLazyQuery } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { colors } from "../constants/colors";
 import TonightButton from "../components/TonightButton";
 import PotluckHeader from "../components/PotluckHeader";
+import ComicBackground from "../components/ComicBackground";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // Wordmark is 532x150 — aspect ~3.55. Sized to a comfortable width.
 const WORDMARK_WIDTH = SCREEN_WIDTH * 0.62;
@@ -579,12 +581,15 @@ const reelStyles = StyleSheet.create({
 export default function SpinScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [spinCount, setSpinCount] = useState(0);
+  const spinCountRef = useRef(0); // mirrors spinCount for stable reads in useFocusEffect
   const [seenIds, setSeenIds] = useState([]);
   const [phase, setPhase] = useState("idle");
   const [slots, setSlots] = useState([null, null, null]);
   const [displayedCount, setDisplayedCount] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
   const [resetModalVisible, setResetModalVisible] = useState(false);
+
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   const pendingNav = useRef(null);
 
@@ -600,6 +605,7 @@ export default function SpinScreen({ navigation }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const currentRotation = useRef(0);
+  const raysOpacity = useRef(new Animated.Value(0)).current;
 
   // Entry animation
   useEffect(() => {
@@ -627,6 +633,7 @@ export default function SpinScreen({ navigation }) {
           if (session.slots && session.spinCount > 0) {
             setSlots(session.slots);
             setSpinCount(session.spinCount);
+            spinCountRef.current = session.spinCount;
             setDisplayedCount(session.spinCount);
             setSeenIds(session.seenIds || []);
             setPhase(session.spinCount >= MAX_SPINS ? "softCap" : "revealed");
@@ -653,17 +660,41 @@ export default function SpinScreen({ navigation }) {
     }
   }, [navigation]);
 
+  // Refresh midSubline when SpinScreen comes back into focus after a recipe view.
+  // Doing it here rather than immediately on spin resolve prevents the copy
+  // flickering to "2 spins left" while the navigation push is still animating.
+  useFocusEffect(
+    useCallback(() => {
+      const count = spinCountRef.current;
+      if (count > 0 && count < MAX_SPINS) {
+        setCopy((prev) => ({
+          ...prev,
+          midSubline: pick(MID_SUBLINES(MAX_SPINS - count)),
+        }));
+      }
+      // Fade rays out when returning from RecipeScreen
+      Animated.timing(raysOpacity, {
+        toValue: 0,
+        duration: 400,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    }, []),
+  );
+
   const doReset = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
     pendingNav.current = null;
     setSpinCount(0);
+    spinCountRef.current = 0;
     setSeenIds([]);
     setDisplayedCount(0);
     setSlots([null, null, null]);
     setPhase("idle");
     setErrorMsg(null);
     setResetModalVisible(false);
+    raysOpacity.setValue(0);
     setCopy({
       idleHeadline: pick(IDLE_HEADLINES),
       idleSubline: pick(IDLE_SUBLINES),
@@ -742,15 +773,23 @@ export default function SpinScreen({ navigation }) {
 
         setSeenIds(nextSeen);
         setSpinCount(nextCount);
+        spinCountRef.current = nextCount;
         setDisplayedCount(nextCount);
         setSlots(nextSlots);
         setPhase(isCap ? "softCap" : "revealed");
 
-        if (!isCap)
-          setCopy((prev) => ({
-            ...prev,
-            midSubline: pick(MID_SUBLINES(MAX_SPINS - nextCount)),
-          }));
+        // Fade rays in as a reward for spinning
+        Animated.timing(raysOpacity, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+
+        // Note: midSubline is intentionally NOT updated here.
+        // The user is about to navigate to RecipeScreen — updating copy now
+        // causes a visible flicker ("2 spins left") before the push completes.
+        // Instead, useFocusEffect refreshes it when SpinScreen comes back into focus.
 
         AsyncStorage.setItem(
           STORAGE_KEY,
@@ -793,7 +832,13 @@ export default function SpinScreen({ navigation }) {
         backgroundColor="transparent"
       />
 
-      <PotluckHeader spinCount={displayedCount} />
+      {/* ── Comic background — clips below header via measured height ── */}
+      {headerHeight > 0 && <ComicBackground headerHeight={headerHeight} />}
+
+      <PotluckHeader
+        spinCount={displayedCount}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+      />
 
       <View style={styles.body}>
         {/* ── Wordmark ── */}
@@ -808,6 +853,12 @@ export default function SpinScreen({ navigation }) {
         {/* ── Prize wheel ── */}
         <View style={styles.wheelSlot}>
           <View style={styles.wheelShadow}>
+            {/* rays.png — fades in on spin, out on return */}
+            <Animated.Image
+              source={require("../../assets/rays.png")}
+              style={[styles.raysImg, { opacity: raysOpacity }]}
+              resizeMode="contain"
+            />
             <Animated.Image
               source={require("../../assets/spinner.png")}
               style={[
@@ -931,6 +982,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.offWhite,
+    overflow: "hidden",
   },
   body: {
     flex: 1,
@@ -959,8 +1011,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
     shadowRadius: 18,
+    overflow: "visible",
   },
   spinnerImg: { position: "absolute" },
+  raysImg: {
+    position: "absolute",
+    width:    LOGO_SIZE * 1.1,
+    height:   LOGO_SIZE * 1.1,
+    top:      -(LOGO_SIZE * 0.05),
+    left:     -(LOGO_SIZE * 0.05),
+  },
 
   // Fixed height — error msg or headline/subline, no reflow
   messaging: {

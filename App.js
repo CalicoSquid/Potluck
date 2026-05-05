@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ApolloProvider } from "@apollo/client/react";
+import { Provider as PaperProvider } from "react-native-paper";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as Updates from "expo-updates";
@@ -63,7 +64,9 @@ export default function App() {
         {splashDone && (
           <SafeAreaProvider>
             <ApolloProvider client={client}>
-              <RootNavigator />
+              <PaperProvider>
+                <RootNavigator />
+              </PaperProvider>
             </ApolloProvider>
           </SafeAreaProvider>
         )}

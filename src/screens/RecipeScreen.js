@@ -9,6 +9,7 @@ import {
   Share,
   Linking,
   Dimensions,
+  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -476,6 +477,7 @@ export default function RecipeScreen({ navigation, route }) {
 
   return (
     <View style={styles.root}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       {/* ── Header ── */}
       <PotluckHeader onBack={() => navigation.goBack()} spinCount={spinCount} />
 

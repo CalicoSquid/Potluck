@@ -23,5 +23,13 @@
         "EXPO_PUBLIC_APOLLO_URI": "https://savor-app-server-gql-production.up.railway.app"
       }
     }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
+      }
+    }
   }
 }

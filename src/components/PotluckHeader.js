@@ -22,7 +22,7 @@ import { colors } from "../constants/colors";
  *   spinCount — number of spins used (0–3). Drives pip fill state.
  */
 
-const PIP_COLORS = ["#FF9800", "#4caf50", "#142829"];
+const PIP_COLORS = ["#FF9800", "#4caf50", "#26a69a"];
 const MAX_PIPS   = 3;
 
 const Pip = ({ filled, color }) => (
@@ -36,9 +36,9 @@ const Pip = ({ filled, color }) => (
   />
 );
 
-const PotluckHeader = ({ onBack, spinCount = 0 }) => {
+const PotluckHeader = ({ onBack, spinCount = 0, onLayout }) => {
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} onLayout={onLayout}>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <View style={styles.row}>
           {/* ── Left: back button OR savor logo ── */}
