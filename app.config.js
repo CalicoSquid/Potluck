@@ -6,12 +6,12 @@ const IS_DEV = process.env.EAS_BUILD_PROFILE === "development";
 
 export default {
   expo: {
-    name:               IS_DEV ? "Potluck (Dev)" : "Potluck",
-    slug:               "potluck-by-savor",
-    owner:              "calicosquid",
-    version:            "1.0.0",
-    orientation:        "portrait",
-    icon:               "./assets/playstore_2.png",
+    name: IS_DEV ? "Potluck (Dev)" : "Potluck",
+    slug: "potluck-by-savor",
+    owner: "calicosquid",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/playstore_2.png",
     userInterfaceStyle: "light",
 
     // ── OTA Updates ────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ export default {
     },
 
     ios: {
-      supportsTablet:   false,
+      supportsTablet: false,
       bundleIdentifier: IS_DEV
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
@@ -53,24 +53,25 @@ export default {
     plugins: [
       "expo-font",
       "expo-updates",
+      "./plugins/withAdiRegistration",
       [
         "expo-splash-screen",
         {
-          image:           "./assets/potluck-splash.png",
-          resizeMode:      "contain",
+          image: "./assets/potluck-splash.png",
+          resizeMode: "contain",
           backgroundColor: "#fffefe",
-          imageWidth:      200,
+          imageWidth: 200,
           android: {
-            image:           "./assets/potluck-splash.png",
-            resizeMode:      "contain",
+            image: "./assets/potluck-splash.png",
+            resizeMode: "contain",
             backgroundColor: "#fffefe",
-            imageWidth:      200,
+            imageWidth: 200,
           },
           ios: {
-            image:           "./assets/potluck-splash.png",
-            resizeMode:      "contain",
+            image: "./assets/potluck-splash.png",
+            resizeMode: "contain",
             backgroundColor: "#fffefe",
-            imageWidth:      200,
+            imageWidth: 200,
           },
         },
       ],
