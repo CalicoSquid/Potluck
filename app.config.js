@@ -9,7 +9,7 @@ export default {
     name: IS_DEV ? "Potluck (Dev)" : "Potluck",
     slug: "potluck-by-savor",
     owner: "calicosquid",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     icon: "./assets/playstore_2.png",
     userInterfaceStyle: "light",
@@ -43,7 +43,7 @@ export default {
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
       // Increment this for every Play Store build submission.
-      versionCode: 1,
+      versionCode: 2,
       // Potluck needs no sensitive permissions — no camera, storage, or contacts.
       // Explicit empty array strips the default RN permission set and keeps
       // the Play Store install prompt clean.

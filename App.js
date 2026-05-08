@@ -8,9 +8,17 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as Updates from "expo-updates";
 
+import { Text, TextInput } from "react-native";
 import client from "./src/apollo/client";
 import RootNavigator from "./src/navigation/RootNavigator";
 import SplashTransition from "./src/components/SplashTransition";
+
+// Disable system font scaling globally — prevents accessibility font size
+// settings from breaking fixed layouts throughout the app.
+Text.defaultProps = Text.defaultProps || {};
+Text.defaultProps.allowFontScaling = false;
+TextInput.defaultProps = TextInput.defaultProps || {};
+TextInput.defaultProps.allowFontScaling = false;
 
 // Keep the native splash up until we explicitly hide it.
 SplashScreen.preventAutoHideAsync().catch(() => {});

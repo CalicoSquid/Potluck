@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "react-native-paper";
+import he from "he";
 import { colors } from "../constants/colors";
 import TonightButton from "../components/TonightButton";
 import TonightCard from "../components/TonightCard";
@@ -143,9 +144,9 @@ export default function RecipeScreen({ navigation, route }) {
               ))}
             </View>
           )}
-          <Text style={styles.recipeName}>{recipe.name}</Text>
+          <Text style={styles.recipeName}>{he.decode(recipe.name)}</Text>
           {recipe.description ? (
-            <Text style={styles.description}>{recipe.description}</Text>
+            <Text style={styles.description}>{he.decode(recipe.description)}</Text>
           ) : null}
           <InlineTimes times={recipe.times} />
           {recipe.sourceUrl ? (

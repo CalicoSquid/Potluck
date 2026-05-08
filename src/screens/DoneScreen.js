@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "react-native-paper";
+import he from "he";
 import { colors } from "../constants/colors";
 import TonightButton from "../components/TonightButton";
 import TonightCard from "../components/TonightCard";
@@ -22,13 +23,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ── Brand palette ────────────────────────────────────────────────────────────
 const BRAND = {
-  teal: "#142829",
-  tealDark: "#0d1c1d",
+  teal:      "#142829",
+  tealDark:  "#0d1c1d",
   tealLight: "#1a3536",
-  green: "#4caf50",
-  orange: "#FF9800",
-  cream: "#FFF3EA", // warm wash for the hero backdrop
-  border: "#f0ebe6",
+  green:     "#4caf50",
+  orange:    "#FF9800",
+  cream:     "#FFF3EA",
+  border:    "#f0ebe6",
 };
 
 const SAVOR_STORE_URL =
@@ -59,49 +60,44 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const PERKS = [
   {
-    icon: "food",
+    icon:  "food",
     title: "Your own recipe box",
-    sub: "Save infinity recipes. Tag, search, organise.",
+    sub:   "Save unlimited recipes. Tag, search, organise.",
   },
   {
-    icon: "account-multiple",
+    icon:  "account-multiple",
     title: "Community feed",
-    sub: "Recipes from real cooks. No algorithm.",
+    sub:   "Recipes from real cooks. No algorithm.",
   },
   {
-    icon: "magnify",
+    icon:  "magnify",
     title: "Discover recipes",
-    sub: "Browse the web without leaving the app.",
+    sub:   "Browse the web without leaving the app.",
   },
   {
-    icon: "camera-iris",
+    icon:  "camera-iris",
     title: "Scan from a cookbook",
-    sub: "Snap a page. We turn it into a recipe.",
+    sub:   "Snap a page. We turn it into a recipe.",
   },
 ];
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function DoneScreen({ navigation, route }) {
-  const recipe = route.params?.recipe;
-  const insets = useSafeAreaInsets();
-  // Spin count comes through if present, otherwise show full pips for the
-  // celebration (max state — they completed a recipe).
+  const recipe   = route.params?.recipe;
+  const insets   = useSafeAreaInsets();
   const spinCount = route.params?.spinCount ?? 3;
 
   const [heroLine] = useState(() => {
     const template = pick(HERO_TEMPLATES);
-    return template(recipe?.name ?? "dinner");
+    return template(he.decode(recipe?.name ?? "dinner"));
   });
   const [heroSub] = useState(() => pick(HERO_SUBS));
 
   return (
     <View style={styles.root}>
-      <StatusBar
-        barStyle="dark-content"
-        translucent
-        backgroundColor="transparent"
-      />
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+
       {/* ── Header ── */}
       <PotluckHeader onBack={() => navigation.goBack()} spinCount={spinCount} />
 
@@ -115,7 +111,6 @@ export default function DoneScreen({ navigation, route }) {
       >
         {/* ── Celebration hero card ── */}
         <View style={styles.heroCard}>
-          {/* Soft orange backsplash at top of card */}
           <LinearGradient
             colors={[BRAND.orange + "CC", BRAND.cream, "#ffffff"]}
             style={styles.heroBackdrop}
@@ -123,7 +118,6 @@ export default function DoneScreen({ navigation, route }) {
             end={{ x: 0.5, y: 1 }}
           />
 
-          {/* Floating medallion on the seam */}
           <View style={styles.medallion}>
             <View style={styles.medallionInner}>
               <Icon source="party-popper" size={36} color={BRAND.orange} />
@@ -173,244 +167,234 @@ export default function DoneScreen({ navigation, route }) {
           onPress={() => Linking.openURL(SAVOR_STORE_URL)}
         />
 
-        {/* ── Spin again — quiet tertiary link ── */}
+        {/* ── Spin again ── */}
         <TouchableOpacity
           onPress={() => navigation.popToTop()}
           activeOpacity={0.6}
           style={styles.spinAgainBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 24, right: 24 }}
-        >
-          <Icon source="dice-multiple" size={16} color={BRAND.teal} />
-          <Text style={styles.spinAgainLabel}>Spin again for another</Text>
-        </TouchableOpacity>
-
-        {/* ── CalicoSquid credit + coffee ask ── */}
-        {/* ── CalicoSquid credit + coffee ask ── */}
-        <TouchableOpacity
-          onPress={() =>
-            Linking.openURL("https://buymeacoffee.com/calicosquid")
-          }
-          activeOpacity={0.6}
-          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-          style={styles.coffeeBtn}
-        >
-          <Image
-            source={require("../../assets/csc.png")}
-            style={styles.cscLogo}
-            resizeMode="contain"
-          />
-          <Text style={styles.coffeeText}>
-            CalicoSquidCode · Buy me a coffee ☕
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => Linking.openURL("https://getsavor.recipes/privacy")}
           hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
         >
-          <Text style={styles.footer}>Privacy Policy</Text>
+          <Text style={styles.spinAgainLabel}>← Spin again for another</Text>
         </TouchableOpacity>
+
+        {/* ── Footer row ── */}
+        <View style={styles.footerRow}>
+          <TouchableOpacity
+            onPress={() => Linking.openURL("https://buymeacoffee.com/calicosquid")}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+            style={styles.footerLink}
+          >
+            <Image
+              source={require("../../assets/csc.png")}
+              style={styles.cscLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.footerText}>☕</Text>
+          </TouchableOpacity>
+
+          <View style={styles.footerDivider} />
+
+          <TouchableOpacity
+            onPress={() => Linking.openURL("https://getsavor.recipes/privacy")}
+            hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+            style={styles.footerLink}
+          >
+            <Text style={styles.footerText}>Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.offWhite },
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-  scroll: { flex: 1 },
+const styles = StyleSheet.create({
+  root:          { flex: 1, backgroundColor: colors.offWhite },
+  scroll:        { flex: 1 },
   scrollContent: {
-    alignItems: "center",
+    alignItems:        "center",
     paddingHorizontal: 20,
-    paddingTop: 24,
-    gap: 20,
+    paddingTop:        24,
+    gap:               20,
   },
 
   // ── Hero card ──────────────────────────────────────────────────────────
   heroCard: {
-    width: "100%",
-    borderRadius: 24,
-    overflow: "hidden",
+    width:           "100%",
+    borderRadius:    24,
+    overflow:        "hidden",
     backgroundColor: "#fff",
-    elevation: 4,
-    shadowColor: BRAND.teal,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    paddingTop: 130, // medallion (top 32 + height 80) + 18 breathing room
-    paddingBottom: 28,
-    alignItems: "center",
+    elevation:       4,
+    shadowColor:     BRAND.teal,
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.1,
+    shadowRadius:    12,
+    paddingTop:      130,
+    paddingBottom:   28,
+    alignItems:      "center",
   },
-
-  // The soft orange wash at the top of the card — fades into white
   heroBackdrop: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 140,
+    top:      0,
+    left:     0,
+    right:    0,
+    height:   140,
   },
-
-  // The medallion that sits on the seam — sticker on a present
   medallion: {
-    position: "absolute",
-    top: 32,
-    left: "50%",
-    marginLeft: -40, // half of 80px width — true horizontal centre
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#fff",
-    alignItems: "center",
+    position:       "absolute",
+    top:            32,
+    left:           "50%",
+    marginLeft:     -40,
+    width:          80,
+    height:         80,
+    borderRadius:   40,
+    backgroundColor:"#fff",
+    alignItems:     "center",
     justifyContent: "center",
-    elevation: 6,
-    shadowColor: BRAND.teal,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
+    elevation:      6,
+    shadowColor:    BRAND.teal,
+    shadowOffset:   { width: 0, height: 3 },
+    shadowOpacity:  0.18,
+    shadowRadius:   8,
   },
-  // Inner ring for a subtle "stamped" feel
   medallionInner: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: BRAND.orange + "55",
-    alignItems: "center",
+    width:          68,
+    height:         68,
+    borderRadius:   34,
+    backgroundColor:"#fff",
+    borderWidth:    2,
+    borderColor:    BRAND.orange + "55",
+    alignItems:     "center",
     justifyContent: "center",
   },
-
   heroBody: {
     paddingHorizontal: 24,
-    alignItems: "center",
-    gap: 6,
-    width: "100%",
+    alignItems:        "center",
+    gap:               6,
+    width:             "100%",
   },
   heroEyebrow: {
-    fontFamily: "RalewayBold",
-    fontSize: 11,
-    color: BRAND.orange,
+    fontFamily:    "RalewayBold",
+    fontSize:      11,
+    color:         BRAND.orange,
     letterSpacing: 1.6,
-    marginBottom: 2,
+    marginBottom:  2,
   },
   heroTitle: {
     fontFamily: "RalewayBold",
-    fontSize: 24,
-    color: BRAND.teal,
+    fontSize:   24,
+    color:      BRAND.teal,
     lineHeight: 30,
-    textAlign: "center",
+    textAlign:  "center",
   },
   heroSub: {
     fontFamily: "Raleway",
-    fontSize: 14,
-    color: BRAND.teal,
-    opacity: 0.65,
+    fontSize:   14,
+    color:      BRAND.teal,
+    opacity:    0.65,
     lineHeight: 21,
-    textAlign: "center",
-    marginTop: 4,
+    textAlign:  "center",
+    marginTop:  4,
   },
 
   // ── Savor pitch card ───────────────────────────────────────────────────
-  savorCard: {
-    width: "100%",
-  },
+  savorCard: { width: "100%" },
   savorCardTitle: {
     fontFamily: "RalewayBold",
-    fontSize: 18,
-    color: BRAND.teal,
+    fontSize:   18,
+    color:      BRAND.teal,
     lineHeight: 24,
   },
   savorCardLead: {
-    fontFamily: "Raleway",
-    fontSize: 14,
-    color: BRAND.teal,
-    opacity: 0.65,
-    lineHeight: 20,
-    marginTop: 6,
+    fontFamily:   "Raleway",
+    fontSize:     14,
+    color:        BRAND.teal,
+    opacity:      0.65,
+    lineHeight:   20,
+    marginTop:    6,
     marginBottom: 14,
   },
-
-  perksList: {
-    width: "100%",
-  },
+  perksList: { width: "100%" },
   perkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
+    flexDirection:   "row",
+    alignItems:      "center",
+    gap:             14,
     paddingVertical: 12,
-    width: "100%",
+    width:           "100%",
   },
   perkRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BRAND.border,
   },
   perkIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: colors.primary + "15",
-    alignItems: "center",
+    width:          34,
+    height:         34,
+    borderRadius:   10,
+    backgroundColor:colors.primary + "15",
+    alignItems:     "center",
     justifyContent: "center",
-    flexShrink: 0,
+    flexShrink:     0,
   },
-  perkText: { flex: 1, gap: 2 },
+  perkText:  { flex: 1, gap: 2 },
   perkTitle: {
     fontFamily: "RalewayBold",
-    fontSize: 14,
-    color: BRAND.teal,
+    fontSize:   14,
+    color:      BRAND.teal,
     lineHeight: 18,
   },
   perkSub: {
     fontFamily: "Raleway",
-    fontSize: 12,
-    color: BRAND.teal,
-    opacity: 0.6,
+    fontSize:   12,
+    color:      BRAND.teal,
+    opacity:    0.6,
     lineHeight: 16,
   },
 
-  // ── Spin again — quiet tertiary action ─────────────────────────────────
+  // ── Spin again ─────────────────────────────────────────────────────────
   spinAgainBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    marginTop: -4, // pull tighter to the orange button above
+    alignItems:      "center",
+    paddingVertical: 8,
+    marginTop:       2,
   },
   spinAgainLabel: {
-    fontFamily: "RalewaySemiBold",
-    fontSize: 14,
-    color: BRAND.teal,
-    opacity: 0.65,
+    fontFamily:    "RalewaySemiBold",
+    fontSize:      13,
+    color:         BRAND.teal,
+    opacity:       0.55,
     letterSpacing: 0.2,
   },
 
-  // ── Footer ─────────────────────────────────────────────────────────────
-  coffeeBtn: {
+  // ── Footer row ─────────────────────────────────────────────────────────
+  footerRow: {
+    flexDirection:   "row",
+    alignItems:      "center",
+    justifyContent:  "center",
+    gap:             14,
+    paddingVertical: 8,
+    marginTop:       4,
+  },
+  footerLink: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingVertical: 6,
+    alignItems:    "center",
+    gap:           5,
+  },
+  footerDivider: {
+    width:           1,
+    height:          12,
+    backgroundColor: BRAND.teal,
+    opacity:         0.2,
+  },
+  footerText: {
+    fontFamily:    "Raleway",
+    fontSize:      11,
+    color:         BRAND.teal,
+    opacity:       0.4,
+    letterSpacing: 0.4,
   },
   cscLogo: {
-    width: 28,
-    height: 38,
-  },
-  coffeeText: {
-    fontFamily: "RalewaySemiBold",
-    fontSize: 12,
-    color: BRAND.teal,
-    opacity: 0.70,
-    letterSpacing: 0.2,
-  },
-  footer: {
-    fontFamily: "Raleway",
-    fontSize: 11,
-    color: BRAND.teal,
-    opacity: 0.4,
-    textAlign: "center",
-    letterSpacing: 0.6,
-    marginTop: -4,
+    width:  20,
+    height: 27,
   },
 });

@@ -449,7 +449,6 @@ const styles = StyleSheet.create({
     fontSize:      20,
     fontFamily:    "RalewaySemiBold",
     color:         SPIN_COLOR,
-    letterSpacing: 0.4,
   },
   wordFor: {
     fontSize:      15,
