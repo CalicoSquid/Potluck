@@ -1,47 +1,79 @@
-import React from "react";
-import { View, StyleSheet, Image, TouchableOpacity } from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import { View, StyleSheet, Image, TouchableOpacity, Animated } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "react-native-paper";
 import { colors } from "../constants/colors";
+import AboutSheet from "./AboutSheet";
 
 /**
  * PotluckHeader — shared header for all Potluck screens.
- *
- * Design:
- *   - White background, matches Savor card pattern
- *   - 3px orange gradient strip along the bottom edge as a brand thread
- *   - Left:  Savor logo (home) OR back button (other screens)
- *   - Right: three pip dots showing session spin progress
- *
- * Pips cycle through brand colours — orange, green, teal.
- * Filled pip = spin used. Hollow pip = spin remaining (ring in same colour).
+ *   - Left:  Savor logo (home) OR back chevron (other screens)
+ *   - Right: the three-dot brand signature. Solid at rest; pulses left→right
+ *            while a spin is in flight; taps open the About sheet.
+ *   - Bottom: 3px orange gradient thread.
  *
  * Props:
- *   onBack    — optional. If provided, shows back chevron instead of logo
- *   spinCount — number of spins used (0–3). Drives pip fill state.
+ *   onBack    — optional. If provided, shows back chevron instead of logo.
+ *   spinning  — optional. When true, the signature dots pulse in sequence.
+ *   onLayout  — optional. Reports header height (for ComicBackground).
  */
 
-const PIP_COLORS = ["#FF9800", "#4caf50", "#26a69a"];
-const MAX_PIPS   = 3;
+const DOT_COLORS = ["#FF9800", "#4caf50", "#26a69a"];
 
-const Pip = ({ filled, color }) => (
-  <View
-    style={[
-      styles.pip,
-      filled
-        ? { backgroundColor: color, borderColor: color }
-        : { backgroundColor: "transparent", borderColor: color, opacity: 0.55 },
-    ]}
-  />
-);
+const Signature = ({ spinning, onPress }) => {
+  const dots = useRef(DOT_COLORS.map(() => new Animated.Value(0))).current;
+  const loopRef = useRef(null);
 
-const PotluckHeader = ({ onBack, spinCount = 0, onLayout }) => {
+  useEffect(() => {
+    if (spinning) {
+      const pulse = (v) =>
+        Animated.sequence([
+          Animated.timing(v, { toValue: 1, duration: 160, useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: 260, useNativeDriver: true }),
+        ]);
+      loopRef.current = Animated.loop(Animated.stagger(130, dots.map(pulse)));
+      loopRef.current.start();
+    } else {
+      loopRef.current?.stop();
+      dots.forEach((v) =>
+        Animated.timing(v, { toValue: 0, duration: 180, useNativeDriver: true }).start()
+      );
+    }
+    return () => loopRef.current?.stop();
+  }, [spinning]);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.6}
+      hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+      style={styles.signature}
+    >
+      {dots.map((v, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.dot,
+            {
+              backgroundColor: DOT_COLORS[i],
+              opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+              transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] }) }],
+            },
+          ]}
+        />
+      ))}
+    </TouchableOpacity>
+  );
+};
+
+const PotluckHeader = ({ onBack, spinning = false, onLayout }) => {
+  const [aboutVisible, setAboutVisible] = useState(false);
+
   return (
     <View style={styles.wrap} onLayout={onLayout}>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <View style={styles.row}>
-          {/* ── Left: back button OR savor logo ── */}
           <View style={styles.leftSlot}>
             {onBack ? (
               <TouchableOpacity
@@ -54,85 +86,47 @@ const PotluckHeader = ({ onBack, spinCount = 0, onLayout }) => {
               </TouchableOpacity>
             ) : (
               <Image
-                source={require("../../assets/savor-logo.png")}
+                source={require("../../assets/potluck-splash.png")}
                 style={styles.logo}
                 resizeMode="contain"
               />
             )}
           </View>
 
-          {/* ── Right: spin progress pips ── */}
-          <View style={styles.rightSlot}>
-            {Array.from({ length: MAX_PIPS }).map((_, i) => (
-              <Pip
-                key={i}
-                color={PIP_COLORS[i]}
-                filled={i < spinCount}
-              />
-            ))}
-          </View>
+          <Signature spinning={spinning} onPress={() => setAboutVisible(true)} />
         </View>
       </SafeAreaView>
 
-      {/* ── Bottom edge: 3px orange gradient thread ── */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         style={styles.thread}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
       />
+
+      <AboutSheet visible={aboutVisible} onClose={() => setAboutVisible(false)} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  wrap: {
-    backgroundColor: "#ffffff",
-  },
-  safeArea: {
-    backgroundColor: "#ffffff",
-  },
+  wrap: { backgroundColor: "#ffffff" },
+  safeArea: { backgroundColor: "#ffffff" },
   row: {
-    height:            48,
-    flexDirection:     "row",
-    alignItems:        "center",
-    justifyContent:    "space-between",
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
   },
+  leftSlot: { minWidth: 32, minHeight: 32, alignItems: "flex-start", justifyContent: "center" },
+  backBtn: { width: 32, height: 32, marginLeft: -6, alignItems: "center", justifyContent: "center" },
+  logo: { width: 30, height: 30 },
 
-  leftSlot: {
-    minWidth:   32,
-    minHeight:  32,
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  backBtn: {
-    width:          32,
-    height:         32,
-    marginLeft:     -6,    // chevron has padding, pull it back to align with 16px edge
-    alignItems:     "center",
-    justifyContent: "center",
-  },
-  logo: {
-    width:  30,
-    height: 30,
-  },
+  signature: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 6, paddingLeft: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
 
-  rightSlot: {
-    flexDirection: "row",
-    alignItems:    "center",
-    gap:           7,
-  },
-  pip: {
-    width:        9,
-    height:       9,
-    borderRadius: 4.5,
-    borderWidth:  1.5,
-  },
-
-  thread: {
-    height: 3,
-    width:  "100%",
-  },
+  thread: { height: 3, width: "100%" },
 });
 
 export default PotluckHeader;

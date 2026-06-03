@@ -9,51 +9,402 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { Icon } from "react-native-paper";
 import { useLazyQuery } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "@react-navigation/native";
+import he from "he";
 
 import { colors } from "../constants/colors";
 import TonightButton from "../components/TonightButton";
 import PotluckHeader from "../components/PotluckHeader";
 import ComicBackground from "../components/ComicBackground";
-import SlotReel from "../components/SlotReel";
-import ConfirmResetModal from "../components/ConfirmResetModal";
 
-import {
-  pick,
-  IDLE_HEADLINES, IDLE_SUBLINES,
-  MID_HEADLINES,  MID_SUBLINES,
-  CAP_HEADLINES,  CAP_CHEEKS,
-} from "../copy/spinCopy";
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
+// ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const WORDMARK_WIDTH  = SCREEN_WIDTH * 0.62;
-const WORDMARK_ASPECT = 532 / 150;
+const WORDMARK_WIDTH  = SCREEN_WIDTH * 0.94;
+const WORDMARK_ASPECT = 1500 / 550;
 const WORDMARK_HEIGHT = WORDMARK_WIDTH / WORDMARK_ASPECT;
 
-const LOGO_SIZE     = SCREEN_WIDTH * 0.72;
-const SPINNER_SIZE  = LOGO_SIZE * 0.72;
-const MAX_SPINS     = 3;
+const CENTER_SIZE   = SCREEN_WIDTH * 0.64;
 const SPIN_DURATION = 1800;
-const STORAGE_KEY   = "potluck_session";
+const STORAGE_KEY   = "potluck_daily";
 
-const REEL_GAP    = 10;
-const REEL_WIDTH  = (SCREEN_WIDTH - 32 - REEL_GAP * 2) / 3;
-const REEL_HEIGHT = 84;
+const RECIPE_URL_BASE = "https://getsavor.recipes/r/"; // ← swap to getsavor.com/r/ if canonical
+
+// Teal = structure/action. Orange (wordmark + win-accents) = the spark.
+const TEAL_GRADIENT = ["#1a3536", "#0d1c1d"];
+const TEAL_SHADOW   = "#142829";
+
+const REEL_SYMBOLS = ["🍳","🥗","🍝","🍕","🍔","🍜","🥘","🍱","🌮","🥐","🍣","🍲","🥩","🍰","🦞","🌯","🍛","🫕"];
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+const IDLE_HEADLINES = [
+  "Let the universe decide.",
+  "What's for dinner?",
+  "Leave it to fate.",
+  "Hungry? Spin.",
+];
+const IDLE_SUBLINES = [
+  "No scrolling. No deciding. Just cook.",
+  "One spin. Dinner sorted.",
+  "The wheel knows.",
+];
+const REVEAL_SUBLINES = [
+  "The universe has spoken.",
+  "Don't overthink it.",
+  "Trust the wheel.",
+  "That's the one.",
+  "Fate's made the call.",
+  "No notes. Go cook.",
+  "Dinner, decided.",
+  "The wheel doesn't miss.",
+  "This is what you're having.",
+  "Settled. Get the pan out.",
+  "Argue with the universe later.",
+  "It chose. You cook.",
+  "Resistance is futile. Also delicious.",
+];
+
+// Contextual verdict pools — flavour that nods to what actually landed.
+const DESSERT_LINES = [
+  "Dessert. No notes.",
+  "The universe wants you to have cake.",
+  "Straight to the good part, then.",
+  "Pudding counts as dinner. Officially, now.",
+];
+const BAKING_LINES = [
+  "Get the oven on.",
+  "Baking it is. Mind the timer.",
+  "Flour everywhere by tonight. Worth it.",
+];
+const BRINNER_LINES = [
+  "Breakfast. For dinner. The universe insists.",
+  "Eggs after dark. Why not.",
+  "Brinner. The wheel's feeling chaotic.",
+];
+const QUICK_LINES = [
+  "Quick one. You'll barely notice.",
+  "On the table before you change your mind.",
+  "Fast. The universe respects your time.",
+];
+const SLOW_LINES = [
+  "Clear the evening — this one takes a while.",
+  "A project. The universe believes in you.",
+  "Low and slow. Pour something.",
+];
+
+const REROLL_LABELS = [
+  "Not feeling it? Spin again",
+  "Again? Go on then",
+  "The universe is patient…",
+  "Truly? Once more",
+  "…you're impossible",
+  "Fine. Spin. (it was right the first time)",
+];
+
+// ── Helpers ─────────────────────────────────────────────────────────────────--
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
+
+const daypartNow = () => {
+  const h = new Date().getHours();
+  return h >= 5 && h < 11 ? "breakfast" : "dinner";
+};
+
+const sumTime = (t) => (t ? (t.hours || 0) * 60 + (t.minutes || 0) : 0);
+const totalMins = (r) => {
+  const tot = sumTime(r?.times?.total);
+  if (tot) return tot;
+  return sumTime(r?.times?.prep) + sumTime(r?.times?.cook);
+};
+const fmtMins = (m) =>
+  m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 60)}h`;
+
+const lc = (s) => (typeof s === "string" ? s.toLowerCase() : "");
+const hasAny = (hay, words) => words.some((w) => hay.includes(w));
+
+// Sometimes the verdict reflects what landed; otherwise a plain fate line —
+// kept ~60/40 so the nod stays a surprise rather than a pattern.
+const verdictFor = (recipe) => {
+  const hay  = `${lc(recipe?.category)} ${lc(recipe?.cuisine)} ${lc(recipe?.name)}`;
+  const mins = totalMins(recipe);
+  const pools = [];
+
+  if (hasAny(hay, ["dessert","cake","cookie","brownie","pastry","pie","muffin","tart","pudding","cheesecake","cupcake","doughnut","donut","sweet"])) {
+    pools.push(DESSERT_LINES);
+  } else if (hasAny(hay, ["bread","loaf","bake","scone","biscuit","focaccia","bagel"])) {
+    pools.push(BAKING_LINES);
+  }
+
+  if (daypartNow() === "dinner" &&
+      hasAny(hay, ["breakfast","brunch","pancake","waffle","omelette","omelet","porridge","granola","french toast","cereal"])) {
+    pools.push(BRINNER_LINES);
+  }
+
+  if (mins && mins <= 20)      pools.push(QUICK_LINES);
+  else if (mins && mins >= 90) pools.push(SLOW_LINES);
+
+  if (pools.length && Math.random() < 0.6) return pick(pick(pools));
+  return pick(REVEAL_SUBLINES);
+};
+
+const decodeStr = (s) => (typeof s === "string" ? he.decode(s) : s);
+const decodeRecipe = (r) => {
+  if (!r) return r;
+  return {
+    ...r,
+    name:         decodeStr(r.name),
+    description:  decodeStr(r.description),
+    category:     decodeStr(r.category),
+    cuisine:      decodeStr(r.cuisine),
+    recipeYield:  decodeStr(r.recipeYield),
+    ingredients:  Array.isArray(r.ingredients)  ? r.ingredients.map(decodeStr)  : r.ingredients,
+    instructions: Array.isArray(r.instructions) ? r.instructions.map(decodeStr) : r.instructions,
+  };
+};
+
+// One housing, three contents. Teal cabinet, orange win-lights.
+//   idle     → wheel, floating (no housing, no shadow)
+//   spinning → housing lifts in; emoji cycle behind the glass; reel-click haptics
+//   revealed → photo lands behind the same glass; gold markers flash; badge + share appear
+function Centerpiece({ phase, recipe, size, badge, onShare }) {
+  const spinnerRot    = useRef(new Animated.Value(0)).current;
+  const wheelOpacity  = useRef(new Animated.Value(1)).current;
+  const reelOpacity   = useRef(new Animated.Value(0)).current;
+  const cardOpacity   = useRef(new Animated.Value(0)).current;
+  const bezelOpacity  = useRef(new Animated.Value(0)).current;
+  const markerOpacity = useRef(new Animated.Value(0)).current;
+  const lockScale     = useRef(new Animated.Value(1)).current;
+  const glow          = useRef(new Animated.Value(0)).current;
+
+  const [symbol, setSymbol] = useState("🍳");
+  const tickRef   = useRef(null);
+  const rotRef    = useRef(0);
+  const prevPhase = useRef(phase);
+
+  const SP = size * 0.72;
+
+  const stopCycle = () => { if (tickRef.current) clearTimeout(tickRef.current); };
+  const startCycle = () => {
+    let step = 0;
+    const tick = () => {
+      step++;
+      const interval = 55 + Math.min(step / 40, 1) * 150;
+      setSymbol((p) => {
+        let n;
+        do { n = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)]; }
+        while (n === p && REEL_SYMBOLS.length > 1);
+        return n;
+      });
+      if (interval > 120) Haptics.selectionAsync().catch(() => {});
+      tickRef.current = setTimeout(tick, interval);
+    };
+    tickRef.current = setTimeout(tick, 55);
+  };
+
+  useEffect(() => {
+    const prev = prevPhase.current;
+    prevPhase.current = phase;
+
+    if (phase === "spinning") {
+      rotRef.current += 3 * 360;
+      Animated.timing(spinnerRot, { toValue: rotRef.current, duration: SPIN_DURATION, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      lockScale.setValue(1);
+      Animated.parallel([
+        Animated.timing(wheelOpacity,  { toValue: 0,    duration: 200, useNativeDriver: true }),
+        Animated.timing(cardOpacity,   { toValue: 0,    duration: 160, useNativeDriver: true }),
+        Animated.timing(reelOpacity,   { toValue: 1,    duration: 200, delay: 80, useNativeDriver: true }),
+        Animated.timing(bezelOpacity,  { toValue: 1,    duration: 220, useNativeDriver: true }),
+        Animated.timing(markerOpacity, { toValue: 0.85, duration: 220, useNativeDriver: true }),
+      ]).start();
+      startCycle();
+    } else if (phase === "revealed") {
+      stopCycle();
+      const doPop = prev === "spinning";
+      cardOpacity.setValue(0);
+      if (doPop) lockScale.setValue(0.86);
+      Animated.parallel([
+        Animated.timing(reelOpacity,  { toValue: 0, duration: 160, useNativeDriver: true }),
+        Animated.timing(wheelOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+        Animated.timing(bezelOpacity, { toValue: 1, duration: 160, useNativeDriver: true }),
+        Animated.timing(cardOpacity,  { toValue: 1, duration: 300, delay: 50, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.spring(lockScale,    { toValue: 1, friction: 4.5, tension: 320, useNativeDriver: true }),
+      ]).start();
+      if (doPop) {
+        Animated.sequence([
+          Animated.timing(markerOpacity, { toValue: 1,   duration: 80,  delay: 40, useNativeDriver: true }),
+          Animated.timing(markerOpacity, { toValue: 0.9, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ]).start();
+        Animated.sequence([
+          Animated.timing(glow, { toValue: 1, duration: 60, delay: 40, useNativeDriver: true }),
+          Animated.timing(glow, { toValue: 0, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ]).start();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+      } else {
+        markerOpacity.setValue(0.9);
+      }
+    } else {
+      stopCycle();
+      Animated.parallel([
+        Animated.timing(wheelOpacity,  { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.timing(reelOpacity,   { toValue: 0, duration: 160, useNativeDriver: true }),
+        Animated.timing(cardOpacity,   { toValue: 0, duration: 160, useNativeDriver: true }),
+        Animated.timing(bezelOpacity,  { toValue: 0, duration: 220, useNativeDriver: true }),
+        Animated.timing(markerOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    rotRef.current = 2.4 * 360;
+    Animated.timing(spinnerRot, { toValue: rotRef.current, duration: 1400, delay: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    return stopCycle;
+  }, []);
+
+  const rotate = spinnerRot.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"] });
+
+  return (
+    <Animated.View style={[cp.wrap, { width: size, height: size, transform: [{ scale: lockScale }] }]}>
+      {/* Drop shadow / lift — follows the housing so the idle wheel floats free */}
+      <Animated.View style={[StyleSheet.absoluteFill, cp.lift, { opacity: bezelOpacity }]} />
+
+      <View style={[StyleSheet.absoluteFill, cp.frame]}>
+        {/* Wheel face */}
+        <Animated.View style={[StyleSheet.absoluteFill, cp.center, { opacity: wheelOpacity }]} pointerEvents="none">
+          <Animated.Image
+            source={require("../../assets/spinner.png")}
+            resizeMode="contain"
+            style={{ position: "absolute", width: SP, height: SP, top: (size - SP) / 1.4, left: (size - SP) / 2, transform: [{ rotate }] }}
+          />
+          <Image source={require("../../assets/outer.png")} resizeMode="contain" style={{ width: size, height: size }} />
+        </Animated.View>
+
+        {/* Reel face */}
+        <Animated.View style={[StyleSheet.absoluteFill, cp.reelGround, { opacity: reelOpacity }]} pointerEvents="none">
+          <Text style={cp.symbol}>{symbol}</Text>
+        </Animated.View>
+
+        {/* Card face */}
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: cardOpacity }]} pointerEvents="none">
+          {recipe?.image ? (
+            <Image source={{ uri: recipe.image }} resizeMode="cover" fadeDuration={0} style={StyleSheet.absoluteFill} />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, cp.center, { backgroundColor: colors.primary + "15" }]}>
+              <Text style={{ fontSize: size * 0.28 }}>🍽️</Text>
+            </View>
+          )}
+          <LinearGradient
+            colors={["transparent", "rgba(20,40,41,0.9)"]}
+            start={{ x: 0.5, y: 0.4 }}
+            end={{ x: 0.5, y: 1 }}
+            style={cp.scrim}
+          />
+          <Text style={cp.cardTitle} numberOfLines={2}>{recipe?.name}</Text>
+        </Animated.View>
+
+        {/* Teal housing */}
+        <Animated.View style={[StyleSheet.absoluteFill, cp.bezel, { opacity: bezelOpacity }]} pointerEvents="none">
+          <View style={cp.glassTop} />
+          <View style={cp.glassBottom} />
+        </Animated.View>
+
+        {/* Gold win-row markers */}
+        <Animated.View style={[cp.markerLeft,  { opacity: markerOpacity }]} pointerEvents="none" />
+        <Animated.View style={[cp.markerRight, { opacity: markerOpacity }]} pointerEvents="none" />
+
+        {/* Win glow */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: "#FF9800", opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.22] }) }]}
+        />
+
+        {/* Reading badge + share — live on the card itself, only when revealed */}
+        {phase === "revealed" && (
+          <>
+            {badge ? (
+              <Animated.View style={[cp.badge, { opacity: cardOpacity }]} pointerEvents="none">
+                <Text style={cp.badgeText}>{badge}</Text>
+              </Animated.View>
+            ) : null}
+
+            <Animated.View style={[cp.shareWrap, { opacity: cardOpacity }]}>
+              <TouchableOpacity
+                onPress={onShare}
+                style={cp.shareBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon source="share-variant" size={17} color="#fff" />
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+const cp = StyleSheet.create({
+  wrap: { alignItems: "center", justifyContent: "center" },
+
+  lift: {
+    borderRadius: 26,
+    backgroundColor: "#fff",
+    shadowColor: "#142829",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+
+  frame: { borderRadius: 26, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  center: { alignItems: "center", justifyContent: "center" },
+  reelGround: { backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  symbol: { fontSize: 96, lineHeight: 104 },
+
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
+  cardTitle: { position: "absolute", left: 16, right: 16, bottom: 16, fontFamily: "RalewayBold", fontSize: 22, lineHeight: 27, color: "#fff" },
+
+  // Teal cabinet — deeper border + tinted glass so the gold markers pop against it.
+  bezel: { borderRadius: 26, borderWidth: 3, borderColor: "rgba(20,40,41,0.55)" },
+  glassTop:    { position: "absolute", top: 0, left: 0, right: 0, height: "15%", backgroundColor: "rgba(20,40,41,0.10)" },
+  glassBottom: { position: "absolute", bottom: 0, left: 0, right: 0, height: "13%", backgroundColor: "rgba(20,40,41,0.06)" },
+
+  markerLeft: {
+    position: "absolute", left: 6, top: "50%", marginTop: -7,
+    width: 0, height: 0,
+    borderTopWidth: 7, borderBottomWidth: 7, borderLeftWidth: 10,
+    borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: "#FFB300",
+  },
+  markerRight: {
+    position: "absolute", right: 6, top: "50%", marginTop: -7,
+    width: 0, height: 0,
+    borderTopWidth: 7, borderBottomWidth: 7, borderRightWidth: 10,
+    borderTopColor: "transparent", borderBottomColor: "transparent", borderRightColor: "#FFB300",
+  },
+
+  badge: { position: "absolute", top: 10, left: 10, backgroundColor: "rgba(20,40,41,0.82)", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
+  badgeText: { fontFamily: "RalewayBold", fontSize: 10, letterSpacing: 1, color: "#fff" },
+
+  shareWrap: { position: "absolute", top: 10, right: 10 },
+  shareBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(20,40,41,0.55)", alignItems: "center", justifyContent: "center" },
+});
 
 // ── GraphQL ───────────────────────────────────────────────────────────────────
-
 const RANDOM_RECIPE = gql`
-  query RandomRecipe($excludeIds: [ID]) {
-    randomRecipe(excludeIds: $excludeIds) {
+  query RandomRecipe($excludeIds: [ID], $daypart: String) {
+    randomRecipe(excludeIds: $excludeIds, daypart: $daypart) {
       id
       name
       description
@@ -73,474 +424,235 @@ const RANDOM_RECIPE = gql`
   }
 `;
 
-// ── Main screen ───────────────────────────────────────────────────────────────
-
+// ── Screen ──────────────────────────────────────────────────────────────────--
 export default function SpinScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [spinCount,         setSpinCount]         = useState(0);
-  const [seenIds,           setSeenIds]           = useState([]);
-  const [phase,             setPhase]             = useState("idle");
-  const [slots,             setSlots]             = useState([null, null, null]);
-  const [displayedCount,    setDisplayedCount]    = useState(0);
-  const [errorMsg,          setErrorMsg]          = useState(null);
-  const [resetModalVisible, setResetModalVisible] = useState(false);
-  const [headerHeight,      setHeaderHeight]      = useState(0);
-
-  const [copy, setCopy] = useState(() => ({
+  const [phase,           setPhase]           = useState("idle"); // idle | spinning | revealed
+  const [recipe,          setRecipe]          = useState(null);
+  const [isReading,       setIsReading]       = useState(false);
+  const [hasReadingToday, setHasReadingToday] = useState(false);
+  const [sessionSpins,    setSessionSpins]    = useState(0);
+  const [seenIds,         setSeenIds]         = useState([]);
+  const [errorMsg,        setErrorMsg]        = useState(null);
+  const [headerHeight,    setHeaderHeight]    = useState(0);
+  const [revealSub,       setRevealSub]       = useState(() => pick(REVEAL_SUBLINES));
+  const [copy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
     idleSubline:  pick(IDLE_SUBLINES),
-    midHeadline:  pick(MID_HEADLINES),
-    midSubline:   pick(MID_SUBLINES(MAX_SPINS - 1)),
-    capHeadline:  pick(CAP_HEADLINES),
-    capCheek:     pick(CAP_CHEEKS),
   }));
 
-  // ── Refs ───────────────────────────────────────────────────────────────────
-  const spinCountRef    = useRef(0);
-  const pendingNav      = useRef(null);
-  const currentRotation = useRef(0);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const scaleAnim   = useRef(new Animated.Value(1)).current;
-  const spinAnim    = useRef(new Animated.Value(0)).current;
-  const raysOpacity = useRef(new Animated.Value(0)).current;
-
-  // ── Entry animation ────────────────────────────────────────────────────────
   useEffect(() => {
-    const t = setTimeout(() => {
-      const demoTarget = 2.4 * 360;
-      Animated.timing(spinAnim, {
-        toValue: demoTarget, duration: 1400,
-        easing: Easing.out(Easing.cubic), useNativeDriver: true,
-      }).start();
-      currentRotation.current = demoTarget;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, 400);
-    return () => clearTimeout(t);
-  }, []);
-
-  // ── Session restore ────────────────────────────────────────────────────────
-  useEffect(() => {
+    let cancelled = false;
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
-        if (!raw) return;
+        if (cancelled || !raw) return;
         try {
-          const session = JSON.parse(raw);
-          if (session.slots && session.spinCount > 0) {
-            setSlots(session.slots);
-            setSpinCount(session.spinCount);
-            spinCountRef.current = session.spinCount;
-            setDisplayedCount(session.spinCount);
-            setSeenIds(session.seenIds || []);
-            setPhase(session.spinCount >= MAX_SPINS ? "softCap" : "revealed");
+          const saved = JSON.parse(raw);
+          if (saved?.date === todayKey()) {
+            setHasReadingToday(true);
+            if (saved.recipe?.id) setSeenIds([saved.recipe.id]);
           }
-        } catch (_) {
+        } catch {
           AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
         }
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
-  // ── Apollo ─────────────────────────────────────────────────────────────────
-  const [fetchRecipe, { loading }] = useLazyQuery(RANDOM_RECIPE, {
-    fetchPolicy: "no-cache",
-  });
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleReelLocked = useCallback(() => {
-    if (pendingNav.current) {
-      const nav = pendingNav.current;
-      pendingNav.current = null;
-      navigation.navigate("Recipe", nav);
-    }
-  }, [navigation]);
-
-  // Deferred copy + rays fade-out on focus return (avoids pre-nav flicker)
-  useFocusEffect(
-    useCallback(() => {
-      const count = spinCountRef.current;
-      if (count > 0 && count < MAX_SPINS) {
-        setCopy((prev) => ({
-          ...prev,
-          midSubline: pick(MID_SUBLINES(MAX_SPINS - count)),
-        }));
-      }
-      Animated.timing(raysOpacity, {
-        toValue: 0, duration: 400,
-        easing: Easing.in(Easing.quad), useNativeDriver: true,
-      }).start();
-    }, []),
-  );
-
-  const doReset = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-    pendingNav.current   = null;
-    spinCountRef.current = 0;
-    raysOpacity.setValue(0);
-    setSpinCount(0);
-    setSeenIds([]);
-    setDisplayedCount(0);
-    setSlots([null, null, null]);
-    setPhase("idle");
-    setErrorMsg(null);
-    setResetModalVisible(false);
-    setCopy({
-      idleHeadline: pick(IDLE_HEADLINES),
-      idleSubline:  pick(IDLE_SUBLINES),
-      midHeadline:  pick(MID_HEADLINES),
-      midSubline:   pick(MID_SUBLINES(MAX_SPINS - 1)),
-      capHeadline:  pick(CAP_HEADLINES),
-      capCheek:     pick(CAP_CHEEKS),
-    });
-  }, []);
-
-  const handleReset = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setResetModalVisible(true);
-  }, []);
+  const [fetchRecipe, { loading }] = useLazyQuery(RANDOM_RECIPE, { fetchPolicy: "no-cache" });
 
   const handleSpin = useCallback(() => {
     if (phase === "spinning" || loading) return;
 
     setErrorMsg(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSessionSpins((n) => n + 1);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setPhase("spinning");
 
     Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 0.94, duration: 100,
-        easing: Easing.out(Easing.quad), useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1, duration: 220,
-        easing: Easing.out(Easing.back(2)), useNativeDriver: true,
-      }),
+      Animated.timing(scaleAnim, { toValue: 0.94, duration: 100, easing: Easing.out(Easing.quad),    useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1,    duration: 220, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
     ]).start();
 
-    const fetchPromise = fetchRecipe({ variables: { excludeIds: seenIds } });
-    const targetDeg    = currentRotation.current + (4 + Math.random()) * 360;
-    currentRotation.current = targetDeg;
-
-    const animPromise = new Promise((resolve) => {
-      Animated.timing(spinAnim, {
-        toValue: targetDeg, duration: SPIN_DURATION,
-        easing: Easing.out(Easing.cubic), useNativeDriver: true,
-      }).start(resolve);
-    });
-
-    Promise.all([fetchPromise, animPromise])
-      .then(([{ data, error }]) => {
-        if (error) {
-          setPhase(spinCount > 0 ? "revealed" : "idle");
-          setErrorMsg("Couldn't reach the server. Check your connection and try again.");
-          return;
-        }
-        const recipe = data?.randomRecipe;
-        if (!recipe) {
-          setPhase(spinCount > 0 ? "revealed" : "idle");
-          setErrorMsg("No recipe came back — give it another spin.");
-          return;
-        }
-
-        const nextCount = spinCount + 1;
-        const nextSeen  = [...seenIds, recipe.id];
-        const nextSlots = slots.map((s, i) => i === nextCount - 1 ? recipe : s);
-        const isCap     = nextCount >= MAX_SPINS;
-
-        setErrorMsg(null);
-        setSeenIds(nextSeen);
-        setSpinCount(nextCount);
-        spinCountRef.current = nextCount;
-        setDisplayedCount(nextCount);
-        setSlots(nextSlots);
-        setPhase(isCap ? "softCap" : "revealed");
-
-        // Rays fade in as spin reward; fade out deferred to useFocusEffect on return
-        Animated.timing(raysOpacity, {
-          toValue: 1, duration: 600,
-          easing: Easing.out(Easing.quad), useNativeDriver: true,
-        }).start();
-
-        // midSubline intentionally NOT updated here — avoids pre-nav copy flicker
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-          slots: nextSlots, spinCount: nextCount, seenIds: nextSeen,
-        })).catch(() => {});
-
-        pendingNav.current = { recipe, spinCount: nextCount, seenIds: nextSeen, isLast: false };
-      })
-      .catch(() => {
-        setPhase(spinCount > 0 ? "revealed" : "idle");
-        setErrorMsg("Something went wrong. Give it another spin.");
+    const fetchPromise = fetchRecipe({ variables: { excludeIds: seenIds, daypart: daypartNow() } })
+      .then((res) => {
+        const img = res?.data?.randomRecipe?.image;
+        if (img) Image.prefetch(img).catch(() => {});
+        return res;
       });
-  }, [phase, loading, seenIds, spinCount, slots]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
-  const spinRotate = spinAnim.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"] });
-  const isSpinning = phase === "spinning";
-  const isSoftCap  = phase === "softCap";
-  const hasSpun    = displayedCount > 0;
-  const headline   = hasSpun && !isSoftCap ? copy.midHeadline : copy.idleHeadline;
-  const subline    = hasSpun && !isSoftCap ? copy.midSubline  : copy.idleSubline;
+    const minSpin = new Promise((r) => setTimeout(r, SPIN_DURATION));
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+    const recover = (msg) => {
+      setPhase(recipe ? "revealed" : "idle");
+      setErrorMsg(msg);
+    };
+
+    Promise.all([fetchPromise, minSpin])
+      .then(([{ data, error }]) => {
+        if (error) return recover("Couldn't reach the server. Check your connection and try again.");
+        const picked = decodeRecipe(data?.randomRecipe);
+        if (!picked) return recover("The universe drew a blank — spin again.");
+
+        setRecipe(picked);
+        setSeenIds((prev) => [...prev, picked.id]);
+        setRevealSub(verdictFor(picked));
+        setPhase("revealed");
+
+        if (!hasReadingToday) {
+          setHasReadingToday(true);
+          setIsReading(true);
+          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayKey(), recipe: picked })).catch(() => {});
+        } else {
+          setIsReading(false);
+        }
+      })
+      .catch(() => recover("Something went wrong. Give it another spin."));
+  }, [phase, loading, seenIds, recipe, hasReadingToday]);
+
+  const handleSeeRecipe = useCallback(() => {
+    if (recipe) navigation.navigate("Recipe", { recipe });
+  }, [recipe, navigation]);
+
+  const handleShare = useCallback(() => {
+    if (!recipe) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const url = `${RECIPE_URL_BASE}${recipe.id}`;
+    Share.share({
+      message: `The universe says I'm making ${recipe.name} tonight. 🎰\n\nSpin yours in Potluck:\n${url}`,
+    }).catch(() => {});
+  }, [recipe]);
+
+  const isSpinning  = phase === "spinning";
+  const isRevealed  = phase === "revealed" && !!recipe;
+  const rerollLabel = REROLL_LABELS[Math.min(Math.max(sessionSpins - 1, 0), REROLL_LABELS.length - 1)];
+
+  const mins     = isRevealed ? totalMins(recipe) : 0;
+  const timeStr  = mins ? fmtMins(mins) : null;
+  const yieldStr = isRevealed ? recipe.recipeYield : null;
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
       {headerHeight > 0 && <ComicBackground headerHeight={headerHeight} />}
 
-      <PotluckHeader
-        spinCount={displayedCount}
-        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-      />
+      <PotluckHeader spinning={isSpinning} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)} />
 
       <View style={styles.body}>
-
-        {/* ── Wordmark ── */}
         <View style={styles.wordmarkSlot}>
           <Image
-            source={require("../../assets/wordmark2.png")}
+            source={require("../../assets/pbs5.png")}
             style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
             resizeMode="contain"
           />
         </View>
 
-        {/* ── Prize wheel ── */}
-        <View style={styles.wheelSlot}>
-          <View style={styles.wheelShadow}>
-            <Animated.Image
-              source={require("../../assets/rays.png")}
-              style={[styles.raysImg, { opacity: raysOpacity }]}
-              resizeMode="contain"
-            />
-            <Animated.Image
-              source={require("../../assets/spinner.png")}
-              style={[styles.spinnerImg, {
-                width: SPINNER_SIZE, height: SPINNER_SIZE,
-                top:  (LOGO_SIZE - SPINNER_SIZE) / 1.4,
-                left: (LOGO_SIZE - SPINNER_SIZE) / 2,
-                transform: [{ rotate: spinRotate }],
-              }]}
-              resizeMode="contain"
-            />
-            <Image
-              source={require("../../assets/outer.png")}
-              style={{ width: LOGO_SIZE, height: LOGO_SIZE }}
-              resizeMode="contain"
-            />
+        <View style={styles.hero}>
+          <Centerpiece
+            phase={phase}
+            recipe={recipe}
+            size={CENTER_SIZE}
+            badge={isReading ? "TODAY'S READING" : null}
+            onShare={handleShare}
+          />
+
+          <View style={styles.content}>
+            {isRevealed ? (
+              errorMsg ? (
+                <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
+              ) : (
+                <>
+                  <Text style={styles.revealSub}>{revealSub}</Text>
+                  {(timeStr || yieldStr) && (
+                    <View style={styles.metaRow}>
+                      {timeStr && <Text style={styles.metaText}>⏱  {timeStr}</Text>}
+                      {timeStr && yieldStr ? <View style={styles.metaDot} /> : null}
+                      {yieldStr && <Text style={styles.metaText} numberOfLines={1}>🍽  {yieldStr}</Text>}
+                    </View>
+                  )}
+                </>
+              )
+            ) : isSpinning ? (
+              <Text style={styles.headline}>The universe is deciding…</Text>
+            ) : errorMsg ? (
+              <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
+            ) : (
+              <>
+                <Text style={styles.headline}>{copy.idleHeadline}</Text>
+                <Text style={styles.subline}>{copy.idleSubline}</Text>
+              </>
+            )}
           </View>
         </View>
 
-        {/* ── Messaging ── */}
-        <View style={styles.messaging}>
-          {errorMsg ? (
-            <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
-          ) : (
+        <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {isRevealed ? (
             <>
-              <Text style={styles.headline} numberOfLines={1}>
-                {isSoftCap ? copy.capHeadline : headline}
-              </Text>
-              <Text style={styles.subline} numberOfLines={2}>
-                {isSoftCap ? copy.capCheek : subline}
-              </Text>
-            </>
-          )}
-        </View>
-
-        {/* ── Slot reels ── */}
-        <View style={styles.reelsMachine}>
-          <View style={styles.reelsRow}>
-            <View style={styles.winLine} />
-            {slots.map((recipe, i) => (
-              <SlotReel
-                key={i}
-                index={i}
-                recipe={recipe}
-                reelWidth={REEL_WIDTH}
-                isSpinning={isSpinning}
-                isActiveReel={isSpinning && i === spinCount}
-                onLocked={handleReelLocked}
-                onPress={() =>
-                  recipe && navigation.navigate("Recipe", { recipe, spinCount, seenIds, isLast: false })
-                }
+              <TonightButton
+                icon="silverware-fork-knife"
+                title="See the recipe"
+                subtitle="Ingredients, steps, the lot"
+                gradientColors={TEAL_GRADIENT}
+                shadowColor={TEAL_SHADOW}
+                onPress={handleSeeRecipe}
               />
-            ))}
-          </View>
-        </View>
-
-        {/* ── CTA ── */}
-        <View style={styles.ctaSlot}>
-          {isSoftCap ? (
-            <TouchableOpacity
-              onPress={handleReset}
-              activeOpacity={0.6}
-              style={styles.resetBtn}
-              hitSlop={{ top: 12, bottom: 12, left: 24, right: 24 }}
-            >
-              <Text style={styles.resetLabel}>← Start over</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSpin}
+                style={styles.rerollLink}
+                activeOpacity={0.6}
+                disabled={isSpinning || loading}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.rerollLabel} numberOfLines={2}>↻  {rerollLabel}</Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <Animated.View style={[styles.ctaWrap, { transform: [{ scale: scaleAnim }] }]}>
               <TonightButton
                 icon="dice-multiple"
-                title={hasSpun ? "Spin again" : "Spin"}
-                subtitle={
-                  isSpinning ? "The wheel decides…"
-                  : hasSpun  ? "Get another random recipe"
-                             : "Get a random community recipe"
-                }
+                title="Spin"
+                subtitle={isSpinning ? "The wheel decides…" : "Let the universe pick dinner"}
+                gradientColors={TEAL_GRADIENT}
+                shadowColor={TEAL_SHADOW}
                 onPress={handleSpin}
                 loading={isSpinning}
               />
             </Animated.View>
           )}
         </View>
-
-        {/* ── Footer ── */}
-        <Text
-          style={[styles.footer, { marginBottom: Math.max(insets.bottom, 12) }]}
-          numberOfLines={1}
-        >
-          Powered by Savor
-        </Text>
-
       </View>
-
-      <ConfirmResetModal
-        visible={resetModalVisible}
-        onConfirm={doReset}
-        onCancel={() => setResetModalVisible(false)}
-      />
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
+// ── Styles ──────────────────────────────────────────────────────────────────--
 const styles = StyleSheet.create({
-  root: {
-    flex:            1,
-    backgroundColor: colors.offWhite,
-    overflow:        "hidden",
-  },
-  body: {
-    flex:              1,
-    alignItems:        "center",
-    paddingHorizontal: 16,
-  },
-  wordmarkSlot: {
-    paddingTop:    28,
-    paddingBottom: 24,
-    alignItems:    "center",
-  },
-  wheelSlot: {
-    width:          LOGO_SIZE,
-    height:         LOGO_SIZE,
-    alignItems:     "center",
-    justifyContent: "center",
-  },
-  wheelShadow: {
-    width:         LOGO_SIZE,
-    height:        LOGO_SIZE,
-    position:      "relative",
-    elevation:     12,
-    shadowColor:   "#142829",
-    shadowOffset:  { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius:  18,
-    overflow:      "visible",
-  },
-  spinnerImg: { position: "absolute" },
-  raysImg: {
-    position: "absolute",
-    width:    LOGO_SIZE * 1.1,
-    height:   LOGO_SIZE * 1.1,
-    top:      -(LOGO_SIZE * 0.05),
-    left:     -(LOGO_SIZE * 0.05),
-  },
-  messaging: {
-    height:            68,
-    width:             "100%",
-    alignItems:        "center",
-    justifyContent:    "center",
-    paddingHorizontal: 8,
-    marginTop:         12,
-    marginBottom:      4,
-  },
-  headline: {
-    fontFamily: "RalewayBold",
-    fontSize:   22,
-    lineHeight: 28,
-    color:      "#142829",
-    textAlign:  "center",
-  },
-  subline: {
-    fontFamily: "Raleway",
-    fontSize:   14,
-    lineHeight: 18,
-    color:      "#142829",
-    opacity:    0.55,
-    textAlign:  "center",
-    marginTop:  4,
-  },
-  errorText: {
-    fontFamily: "RalewayBold",
-    fontSize:   14,
-    lineHeight: 20,
-    color:      "#c0392b",
-    textAlign:  "center",
-    opacity:    0.85,
-  },
-  reelsMachine: {
-    width:        "100%",
-    marginTop:    8,
-    marginBottom: 20,
-  },
-  reelsRow: {
-    flexDirection:  "row",
-    gap:            REEL_GAP,
-    position:       "relative",
-    justifyContent: "center",
-  },
-  winLine: {
-    position:        "absolute",
-    left:            -4,
-    right:           -4,
-    top:             REEL_HEIGHT / 2 - 0.5,
-    height:          1,
-    backgroundColor: "#FF9800",
-    opacity:         0.28,
-    zIndex:          0,
-    pointerEvents:   "none",
-  },
-  ctaSlot: {
-    width:          "100%",
-    height:         96,
-    justifyContent: "center",
-    alignItems:     "center",
-    marginTop:      "auto",
-  },
-  ctaWrap:  { width: "100%" },
-  resetBtn: {
-    paddingVertical:   12,
-    paddingHorizontal: 20,
-    borderRadius:      14,
-  },
-  resetLabel: {
-    fontFamily:    "RalewayBold",
-    fontSize:      15,
-    color:         "#142829",
-    letterSpacing: 0.2,
-  },
-  footer: {
-    fontFamily:    "Raleway",
-    fontSize:      11,
-    color:         "#142829",
-    opacity:       0.4,
-    marginTop:     6,
-    letterSpacing: 0.4,
-    textAlign:     "center",
-  },
+  root: { flex: 1, backgroundColor: colors.offWhite, overflow: "hidden" },
+  body: { flex: 1, alignItems: "center", paddingHorizontal: 16 },
+
+  wordmarkSlot: { paddingTop: 14, paddingBottom: 4, alignItems: "center" },
+
+  hero: { flex: 1, width: "100%", alignItems: "center", justifyContent: "center" },
+
+  content: { width: "100%", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, marginTop: 22, minHeight: 56 },
+  headline: { fontFamily: "RalewayBold", fontSize: 22, lineHeight: 28, color: "#142829", textAlign: "center" },
+  subline:  { fontFamily: "Raleway", fontSize: 14, lineHeight: 18, color: "#142829", opacity: 0.55, textAlign: "center", marginTop: 4 },
+  errorText: { fontFamily: "RalewayBold", fontSize: 14, lineHeight: 20, color: "#c0392b", textAlign: "center", opacity: 0.9 },
+
+  revealSub: { fontFamily: "Raleway", fontSize: 14, lineHeight: 18, color: "#142829", opacity: 0.55, textAlign: "center" },
+
+  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 8 },
+  metaText: { fontFamily: "RalewaySemiBold", fontSize: 13, color: "#142829", opacity: 0.6 },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#142829", opacity: 0.35, marginHorizontal: 10 },
+
+  actions: { width: "100%" },
+  ctaWrap: { width: "100%" },
+
+  rerollLink: { marginTop: 12, width: "100%", alignItems: "center", paddingVertical: 4 },
+  rerollLabel: { fontFamily: "RalewaySemiBold", fontSize: 13, color: "#142829", opacity: 0.5, textAlign: "center" },
 });
