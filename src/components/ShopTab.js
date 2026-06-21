@@ -21,11 +21,37 @@ const UNITS = new Set([
   "jars","package","pkg","bag","stick","head","stalk","stalks","sheet",
 ]);
 
-const SKIP = new Set([
-  "water","salt","pepper","black pepper","white pepper","oil","olive oil",
-  "vegetable oil","cooking oil","cooking spray","spray","ice","ice cubes",
-  "to taste","as needed","as required",
-]);
+// Pantry staples you almost certainly own — skipped from the shop list.
+// Matched as whole forms (with common qualifiers) so "kosher salt",
+// "freshly ground black pepper", "extra virgin olive oil" all skip —
+// while "bell pepper", "red pepper flakes", "chilli oil", "peppercorns" stay.
+const PANTRY_RE = [
+  /^(kosher|sea|table|fine|coarse|flaky|flaked)?\s*salt$/,
+  /^salt and pepper$/,
+  /^(freshly|fresh)?\s*(coarsely|finely)?\s*(ground|cracked)?\s*(black|white)?\s*pepper$/,
+  /^(cold|warm|hot|boiling|iced?|lukewarm)?\s*water$/,
+  /^(extra[\s-]?virgin\s*)?(olive|vegetable|canola|sunflower|cooking|neutral|light)?\s*oil$/,
+  /^cooking spray$/,
+  /^ice( cubes)?$/,
+];
+
+// Drop non-ingredient lines: subsection headers and bare labels.
+const isNoiseLine = (raw) => {
+  const t = raw.trim();
+  if (!t) return true;
+  if (t.endsWith(":")) return true;                    // "For the sauce:", "Topping:"
+  if (/^for\b/i.test(t) && !/\d/.test(t)) return true; // "For garnish" (label, no qty)
+  return false;
+};
+
+const shouldSkip = (raw) => {
+  if (isNoiseLine(raw)) return true;
+  const name = parseIngredientName(raw).toLowerCase().trim();
+  if (!name) return true;
+  if (PANTRY_RE.some((re) => re.test(name))) return true;
+  if (/^(to taste|as needed|as required)$/.test(name)) return true;
+  return false;
+};
 
 const parseIngredientName = (str) => {
   let s = str.replace(/\(.*?\)/g, "").trim();
@@ -40,11 +66,6 @@ const parseIngredientName = (str) => {
     "",
   );
   return s.trim();
-};
-
-const shouldSkip = (str) => {
-  const name = parseIngredientName(str).toLowerCase();
-  return SKIP.has(name) || name.length === 0;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────

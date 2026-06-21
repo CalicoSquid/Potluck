@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import InlineTimes from "../components/InlineTimes";
 import IngredientList from "../components/IngredientList";
 import ShopTab from "../components/ShopTab";
 import { TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
+import * as Haptics from "expo-haptics";
+import { getTodaysReading, setTodaysReading } from "../lib/readings";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -105,6 +107,27 @@ export default function RecipeScreen({ navigation, route }) {
 
   const tags = [recipe.cuisine, recipe.category].filter(Boolean);
   const stickyHeight = 94 + 94 + 30 + 12 + (insets.bottom || 12);
+
+  const [locked, setLocked] = useState(false);
+
+  // If this dish is already today's committed pick, reflect that on re-entry.
+  useEffect(() => {
+    getTodaysReading()
+      .then((entry) => {
+        if (entry?.committed && entry?.recipe?.id === recipe.id)
+          setLocked(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLock = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {},
+    );
+    setTodaysReading(recipe, { committed: true }); // the one-a-day save
+    setLocked(true);
+    navigation.navigate("Done", { recipe });
+  };
 
   return (
     <View style={styles.root}>
@@ -227,12 +250,16 @@ export default function RecipeScreen({ navigation, route }) {
         style={[styles.stickyBottom, { paddingBottom: insets.bottom || 12 }]}
       >
         <TonightButton
-          icon="pot-steam-outline"
-          title="Making this"
-          subtitle="Lock it in and go cook"
+          icon={locked ? "lock-check" : "lock-outline"}
+          title={locked ? "Locked in for today" : "Lock it in"}
+          subtitle={
+            locked ? "Today's pick — tap to go cook" : "Your one save for today"
+          }
           gradientColors={TEAL_GRADIENT}
           shadowColor={TEAL_SHADOW}
-          onPress={() => navigation.navigate("Done", { recipe })}
+          onPress={
+            locked ? () => navigation.navigate("Done", { recipe }) : handleLock
+          }
         />
 
         <TouchableOpacity
