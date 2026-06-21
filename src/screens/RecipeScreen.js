@@ -14,94 +14,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "react-native-paper";
 import he from "he";
-import { colors } from "../constants/colors";
-import TonightButton from "../components/TonightButton";
-import TonightCard from "../components/TonightCard";
+import * as Haptics from "expo-haptics";
+
+import { colors, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
+import { getTodaysReading, setTodaysReading } from "../lib/readings";
+import PotluckButton from "../components/PotluckButton";
+import PotluckCard from "../components/PotluckCard";
 import PotluckHeader from "../components/PotluckHeader";
+import TabBar from "../components/TabBar";
 import InlineTimes from "../components/InlineTimes";
 import IngredientList from "../components/IngredientList";
 import ShopTab from "../components/ShopTab";
-import { TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
-import * as Haptics from "expo-haptics";
-import { getTodaysReading, setTodaysReading } from "../lib/readings";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const BRAND = {
-  teal: "#142829",
-  tealDark: "#0d1c1d",
-  tealLight: "#1a3536",
-  orange: "#FF9800",
-  border: "#f0ebe6",
-};
-
-// ── Tab bar ───────────────────────────────────────────────────────────────────
-
-const TabBar = ({ active, onChange }) => (
-  <View style={tabStyles.wrap}>
-    {["Recipe", "Shop"].map((tab) => (
-      <TouchableOpacity
-        key={tab}
-        style={tabStyles.tab}
-        onPress={() => onChange(tab)}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[tabStyles.label, active === tab && tabStyles.labelActive]}
-        >
-          {tab}
-        </Text>
-        {active === tab && (
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            style={tabStyles.indicator}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          />
-        )}
-      </TouchableOpacity>
-    ))}
-  </View>
-);
-
-const tabStyles = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: BRAND.border,
-    marginHorizontal: 20,
-    marginBottom: 4,
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 12,
-    position: "relative",
-  },
-  label: {
-    fontFamily: "RalewaySemiBold",
-    fontSize: 15,
-    color: BRAND.teal,
-    opacity: 0.4,
-  },
-  labelActive: {
-    color: BRAND.teal,
-    opacity: 1,
-  },
-  indicator: {
-    position: "absolute",
-    bottom: -1,
-    left: "20%",
-    right: "20%",
-    height: 3,
-    borderRadius: 2,
-  },
-});
-
-// ── Main screen ───────────────────────────────────────────────────────────────
-
 export default function RecipeScreen({ navigation, route }) {
-  const { recipe, spinCount, seenIds } = route.params;
+  const { recipe } = route.params;
   const [activeTab, setActiveTab] = useState("Recipe");
   const insets = useSafeAreaInsets();
 
@@ -137,7 +65,7 @@ export default function RecipeScreen({ navigation, route }) {
         backgroundColor="transparent"
       />
 
-      <PotluckHeader onBack={() => navigation.goBack()} spinCount={spinCount} />
+      <PotluckHeader onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -187,7 +115,7 @@ export default function RecipeScreen({ navigation, route }) {
               hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               style={styles.sourceRow}
             >
-              <Icon source="web" size={11} color={BRAND.teal} />
+              <Icon source="web" size={11} color={colors.teal} />
               <Text style={styles.sourceUrl} numberOfLines={1}>
                 {
                   recipe.sourceUrl
@@ -217,7 +145,7 @@ export default function RecipeScreen({ navigation, route }) {
               </Text>
             ) : (
               (recipe.instructions || []).map((step, i) => (
-                <TonightCard key={i} style={styles.stepCard}>
+                <PotluckCard key={i} style={styles.stepCard}>
                   <View style={styles.stepRow}>
                     <LinearGradient
                       colors={[colors.gradientStart, colors.gradientEnd]}
@@ -229,7 +157,7 @@ export default function RecipeScreen({ navigation, route }) {
                     </LinearGradient>
                     <Text style={styles.stepText}>{step}</Text>
                   </View>
-                </TonightCard>
+                </PotluckCard>
               ))
             )}
           </View>
@@ -249,7 +177,7 @@ export default function RecipeScreen({ navigation, route }) {
       <View
         style={[styles.stickyBottom, { paddingBottom: insets.bottom || 12 }]}
       >
-        <TonightButton
+        <PotluckButton
           icon={locked ? "lock-check" : "lock-outline"}
           title={locked ? "Locked in for today" : "Lock it in"}
           subtitle={
@@ -308,14 +236,14 @@ const styles = StyleSheet.create({
   recipeName: {
     fontFamily: "RalewayBold",
     fontSize: 24,
-    color: BRAND.teal,
+    color: colors.teal,
     lineHeight: 30,
     marginTop: 2,
   },
   description: {
     fontFamily: "Raleway",
     fontSize: 14,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.7,
     lineHeight: 22,
   },
@@ -330,7 +258,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "Raleway",
     fontSize: 11,
-    color: BRAND.teal,
+    color: colors.teal,
     letterSpacing: 0.1,
     textDecorationLine: "underline",
   },
@@ -339,7 +267,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontFamily: "RalewayBold",
     fontSize: 11,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.5,
     letterSpacing: 1.2,
     textTransform: "uppercase",
@@ -347,13 +275,13 @@ const styles = StyleSheet.create({
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: BRAND.border,
+    backgroundColor: colors.border,
     marginVertical: 6,
   },
   emptyState: {
     fontFamily: "Raleway",
     fontSize: 14,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.5,
     fontStyle: "italic",
   },
@@ -374,7 +302,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "Raleway",
     fontSize: 15,
-    color: BRAND.teal,
+    color: colors.teal,
     lineHeight: 23,
   },
 
@@ -387,9 +315,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: BRAND.border,
+    borderTopColor: colors.border,
     elevation: 10,
-    shadowColor: BRAND.teal,
+    shadowColor: colors.teal,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -398,7 +326,7 @@ const styles = StyleSheet.create({
   spinAgainLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 13,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.55,
     letterSpacing: 0.2,
   },

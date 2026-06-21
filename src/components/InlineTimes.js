@@ -1,11 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors } from "../constants/colors";
 
-const BRAND = {
-  teal:   "#142829",
-  orange: "#FF9800",
-};
+import { colors } from "../constants/colors";
 
 const formatTime = (t) => {
   if (!t) return null;
@@ -51,7 +47,7 @@ const styles = StyleSheet.create({
     width:           3,
     height:          3,
     borderRadius:    2,
-    backgroundColor: BRAND.orange,
+    backgroundColor: colors.orange,
     opacity:         0.6,
   },
   label: {
@@ -62,7 +58,7 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: "Raleway",
     fontSize:   12,
-    color:      BRAND.teal,
+    color:      colors.teal,
     opacity:    0.75,
   },
 });

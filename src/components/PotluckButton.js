@@ -41,7 +41,7 @@ function HalftoneDots() {
   );
 }
 
-const TonightButton = ({
+const PotluckButton = ({
   onPress,
   title,
   subtitle,
@@ -130,4 +130,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TonightButton;
+export default PotluckButton;

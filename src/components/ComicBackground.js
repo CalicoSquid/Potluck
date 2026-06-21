@@ -1,8 +1,8 @@
 import React from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
+import { colors } from "../constants/colors";
 
 const { width: W, height: H } = Dimensions.get("window");
-const ORANGE = "#FF9800";
 const PAD = 12;
 
 function DotGrid({ anchorX, anchorY, cols, rows, spacing, dirX, dirY }) {
@@ -32,7 +32,7 @@ function DotGrid({ anchorX, anchorY, cols, rows, spacing, dirX, dirY }) {
         width:           d.size,
         height:          d.size,
         borderRadius:    d.size / 2,
-        backgroundColor: ORANGE,
+        backgroundColor: colors.orange,
         opacity:         d.opacity,
       }}
     />

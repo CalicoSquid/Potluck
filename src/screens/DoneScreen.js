@@ -10,31 +10,17 @@ import {
   StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "../constants/colors";
-import { setTodaysReading } from "../lib/readings";
-import TonightButton from "../components/TonightButton";
-import PotluckHeader from "../components/PotluckHeader";
 import { Icon } from "react-native-paper";
 
-const BRAND = { teal: "#142829", orange: "#FF9800", border: "#f0ebe6" };
+import { colors } from "../constants/colors";
+import { setTodaysReading } from "../lib/readings";
+import { fmtTotal } from "../lib/time";
+import { pick } from "../lib/spinCopy";
+import PotluckButton from "../components/PotluckButton";
+import PotluckHeader from "../components/PotluckHeader";
 
 const SAVOR_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.calicosquid.savorrecipes";
-
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
-
-const sumTime = (t) => (t ? (t.hours || 0) * 60 + (t.minutes || 0) : 0);
-const fmtTime = (r) => {
-  const m =
-    sumTime(r?.times?.total) ||
-    sumTime(r?.times?.prep) + sumTime(r?.times?.cook);
-  if (!m) return null;
-  return m < 60
-    ? `${m} min`
-    : m % 60
-      ? `${Math.floor(m / 60)}h ${m % 60}m`
-      : `${Math.floor(m / 60)}h`;
-};
 
 const EYEBROWS = ["THAT'S DECIDED", "DINNER, SORTED", "THE VERDICT"];
 const CLOSERS = [
@@ -58,7 +44,7 @@ export default function DoneScreen({ navigation, route }) {
   const [closer] = useState(() => pick(CLOSERS)(recipe?.name ?? "dinner"));
   const [exhale] = useState(() => pick(EXHALES));
 
-  const timeStr = fmtTime(recipe);
+  const timeStr = fmtTotal(recipe);
   const yieldStr = recipe?.recipeYield || null;
 
   // Reaching Done is the commitment signal — this dish becomes today's
@@ -108,7 +94,6 @@ export default function DoneScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* The close */}
         {/* Sealed — this dish is now today's reading */}
         <View style={styles.lockPill}>
           <Icon source="lock" size={11} color="#fff" />
@@ -138,7 +123,7 @@ export default function DoneScreen({ navigation, route }) {
           <Text style={styles.savorLine}>
             Savor is where recipes like this live — saved, scaled, and yours.
           </Text>
-          <TonightButton
+          <PotluckButton
             imageIcon={require("../../assets/savor-logo.png")}
             title="Save this to Savor"
             subtitle="Keep it for next time"
@@ -178,7 +163,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     backgroundColor: "#fff",
     elevation: 4,
-    shadowColor: BRAND.teal,
+    shadowColor: colors.teal,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.14,
     shadowRadius: 10,
@@ -190,28 +175,56 @@ const styles = StyleSheet.create({
   },
   dishFallbackIcon: { fontSize: 52 },
 
- lockPill: {
-  flexDirection: "row", alignItems: "center", gap: 6,
-  backgroundColor: BRAND.teal, borderRadius: 20,
-  paddingVertical: 5, paddingHorizontal: 12, marginBottom: 14,
-},
-lockPillText: { fontFamily: "RalewayBold", fontSize: 10, letterSpacing: 1.6, color: "#fff" },
+  lockPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.teal,
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  lockPillText: {
+    fontFamily: "RalewayBold",
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: "#fff",
+  },
 
-metaRow:  { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 12 },
-metaText: { fontFamily: "RalewaySemiBold", fontSize: 13, color: BRAND.teal, opacity: 0.6 },
-metaDot:  { width: 3, height: 3, borderRadius: 1.5, backgroundColor: BRAND.teal, opacity: 0.35, marginHorizontal: 10 },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+  metaText: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 13,
+    color: colors.teal,
+    opacity: 0.6,
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.teal,
+    opacity: 0.35,
+    marginHorizontal: 10,
+  },
+
   closer: {
     fontFamily: "RalewayBold",
     fontSize: 26,
     lineHeight: 32,
-    color: BRAND.teal,
+    color: colors.teal,
     textAlign: "center",
   },
   exhale: {
     fontFamily: "Raleway",
     fontSize: 15,
     lineHeight: 22,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.6,
     textAlign: "center",
     marginTop: 10,
@@ -223,7 +236,7 @@ metaDot:  { width: 3, height: 3, borderRadius: 1.5, backgroundColor: BRAND.teal,
     fontFamily: "Raleway",
     fontSize: 13,
     lineHeight: 19,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.55,
     textAlign: "center",
     marginBottom: 4,
@@ -234,7 +247,7 @@ metaDot:  { width: 3, height: 3, borderRadius: 1.5, backgroundColor: BRAND.teal,
   spinAgainLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 13,
-    color: BRAND.teal,
+    color: colors.teal,
     opacity: 0.5,
     letterSpacing: 0.2,
   },

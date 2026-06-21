@@ -1,15 +1,15 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import TonightCard from "./TonightCard";
 
-const BRAND = { teal: "#142829", orange: "#FF9800" };
+import PotluckCard from "./PotluckCard";
+import { colors } from "../constants/colors";
 
 const IngredientList = ({ ingredients, recipeYield }) => (
   <View>
     {recipeYield ? (
       <Text style={styles.yieldText}>Serves {recipeYield}</Text>
     ) : null}
-    <TonightCard>
+    <PotluckCard>
       {(ingredients || []).map((item, i) => (
         <View
           key={i}
@@ -22,7 +22,7 @@ const IngredientList = ({ ingredients, recipeYield }) => (
           <Text style={styles.text}>{item}</Text>
         </View>
       ))}
-    </TonightCard>
+    </PotluckCard>
   </View>
 );
 
@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   yieldText: {
     fontFamily:   "Raleway",
     fontSize:     13,
-    color:        BRAND.teal,
+    color:        colors.teal,
     opacity:      0.55,
     marginBottom: 10,
   },
@@ -43,13 +43,13 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#f0ebe6",
+    borderBottomColor: colors.border,
   },
   dot: {
     width:           5,
     height:          5,
     borderRadius:    3,
-    backgroundColor: BRAND.orange,
+    backgroundColor: colors.orange,
     opacity:         0.7,
     marginTop:       8,
     flexShrink:      0,
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     flex:       1,
     fontFamily: "Raleway",
     fontSize:   15,
-    color:      BRAND.teal,
+    color:      colors.teal,
     lineHeight: 22,
   },
 });

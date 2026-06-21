@@ -13,7 +13,8 @@ import {
 import Constants from "expo-constants";
 import { Icon } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native";
-import TonightButton from "./TonightButton";
+import PotluckButton from "./PotluckButton";
+import { colors } from "../constants/colors";
 import { loadReadings, dayKey } from "../lib/readings";
 
 const SAVOR_STORE_URL =
@@ -21,7 +22,6 @@ const SAVOR_STORE_URL =
 const PRIVACY_URL = "https://getsavor.recipes/privacy";
 const COFFEE_URL  = "https://buymeacoffee.com/calicosquid";
 
-const BRAND = { teal: "#142829", orange: "#FF9800", border: "#f0ebe6" };
 
 // "Today" / "Yesterday" / weekday name for a reading entry.
 const relDay = (entry) => {
@@ -143,7 +143,7 @@ const AboutSheet = ({ visible, onClose }) => {
                         {age >= 6 && <Text style={styles.fadingTag}>· fading today</Text>}
                       </View>
                     </View>
-                    <Icon source="chevron-right" size={20} color={BRAND.teal} />
+                    <Icon source="chevron-right" size={20} color={colors.teal} />
                   </TouchableOpacity>
                   );
                 })}
@@ -168,7 +168,7 @@ const AboutSheet = ({ visible, onClose }) => {
                 Savor community.
               </Text>
 
-              <TonightButton
+              <PotluckButton
                 imageIcon={require("../../assets/savor-logo.png")}
                 title="Get Savor — it's free"
                 subtitle="Your own recipe box. No subscription to start."
@@ -214,37 +214,37 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 40,
   },
-  notch: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: "#FF980060", marginBottom: 14 },
+  notch: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.orange + "60", marginBottom: 14 },
 
   // ── Tabs ──────────────────────────────────────────────────────────────
-  tabs: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: BRAND.border, marginBottom: 16 },
+  tabs: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 16 },
   tab: { flex: 1, alignItems: "center", paddingVertical: 10, position: "relative" },
-  tabLabel: { fontFamily: "RalewaySemiBold", fontSize: 15, color: BRAND.teal, opacity: 0.4 },
+  tabLabel: { fontFamily: "RalewaySemiBold", fontSize: 15, color: colors.teal, opacity: 0.4 },
   tabLabelActive: { opacity: 1 },
-  tabUnderline: { position: "absolute", bottom: -1, left: "25%", right: "25%", height: 3, borderRadius: 2, backgroundColor: BRAND.orange },
+  tabUnderline: { position: "absolute", bottom: -1, left: "25%", right: "25%", height: 3, borderRadius: 2, backgroundColor: colors.orange },
 
   // ── Readings list ─────────────────────────────────────────────────────
   list: { maxHeight: 320 },
   readingRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 10 },
   thumbWrap: { width: 52, height: 52, borderRadius: 12, overflow: "hidden" },
-  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: BRAND.border },
+  thumb: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.border },
   thumbFallback: { alignItems: "center", justifyContent: "center" },
   bleach: { ...StyleSheet.absoluteFillObject, backgroundColor: "#FFF8F4" },
   readingText: { flex: 1 },
-  readingName: { fontFamily: "RalewayBold", fontSize: 15, color: BRAND.teal, lineHeight: 20 },
+  readingName: { fontFamily: "RalewayBold", fontSize: 15, color: colors.teal, lineHeight: 20 },
   readingMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-  readingDay: { fontFamily: "Raleway", fontSize: 12, color: BRAND.teal, opacity: 0.5 },
-  fadingTag: { fontFamily: "RalewaySemiBold", fontSize: 12, color: BRAND.orange, opacity: 0.85 },
-  fade: { fontFamily: "Raleway", fontSize: 12, lineHeight: 18, color: BRAND.teal, opacity: 0.5, textAlign: "center", marginTop: 16 },
+  readingDay: { fontFamily: "Raleway", fontSize: 12, color: colors.teal, opacity: 0.5 },
+  fadingTag: { fontFamily: "RalewaySemiBold", fontSize: 12, color: colors.orange, opacity: 0.85 },
+  fade: { fontFamily: "Raleway", fontSize: 12, lineHeight: 18, color: colors.teal, opacity: 0.5, textAlign: "center", marginTop: 16 },
 
   // ── About ─────────────────────────────────────────────────────────────
-  title: { fontFamily: "RalewayBold", fontSize: 22, color: "#142829", marginBottom: 10 },
-  body: { fontFamily: "Raleway", fontSize: 14, lineHeight: 21, color: "#142829", opacity: 0.7, marginBottom: 12 },
+  title: { fontFamily: "RalewayBold", fontSize: 22, color: colors.teal, marginBottom: 10 },
+  body: { fontFamily: "Raleway", fontSize: 14, lineHeight: 21, color: colors.teal, opacity: 0.7, marginBottom: 12 },
   bodyStrong: { fontFamily: "RalewayBold" },
   links: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 6 },
-  link: { fontFamily: "RalewaySemiBold", fontSize: 13, color: "#142829", opacity: 0.55 },
-  linkDivider: { width: 1, height: 12, backgroundColor: "#142829", opacity: 0.2 },
-  credit: { fontFamily: "Raleway", fontSize: 11, color: "#142829", opacity: 0.4, textAlign: "center", marginTop: 14, letterSpacing: 0.3 },
+  link: { fontFamily: "RalewaySemiBold", fontSize: 13, color: colors.teal, opacity: 0.55 },
+  linkDivider: { width: 1, height: 12, backgroundColor: colors.teal, opacity: 0.2 },
+  credit: { fontFamily: "Raleway", fontSize: 11, color: colors.teal, opacity: 0.4, textAlign: "center", marginTop: 14, letterSpacing: 0.3 },
 });
 
 export default AboutSheet;

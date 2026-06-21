@@ -13,19 +13,28 @@ import {
   Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "react-native-paper";
 import { useLazyQuery } from "@apollo/client/react";
-import { gql } from "@apollo/client";
 import * as Haptics from "expo-haptics";
-import he from "he";
 
-import { colors } from "../constants/colors";
+import { colors, tealAlpha, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
 import { getTodaysReading, setTodaysReading } from "../lib/readings";
-import TonightButton from "../components/TonightButton";
+import { totalMins, fmtMins, daypartNow } from "../lib/time";
+import { decodeRecipe } from "../lib/recipe";
+import {
+  pick,
+  verdictFor,
+  IDLE_HEADLINES,
+  IDLE_SUBLINES,
+  REVEAL_SUBLINES,
+  REROLL_LABELS,
+} from "../lib/spinCopy";
+import { RANDOM_RECIPE } from "../apollo/queries";
+import PotluckButton from "../components/PotluckButton";
 import PotluckHeader from "../components/PotluckHeader";
 import ComicBackground from "../components/ComicBackground";
-import { TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
+import Centerpiece from "../components/Centerpiece";
+import TypewriterVerdict from "../components/TypewriterVerdict";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -38,752 +47,6 @@ const CENTER_SIZE = SCREEN_WIDTH * 0.64;
 const SPIN_DURATION = 1800;
 
 const RECIPE_URL_BASE = "https://getsavor.recipes/r/"; // ← swap to getsavor.com/r/ if canonical
-
-const REEL_SYMBOLS = [
-  "🍳",
-  "🥗",
-  "🍝",
-  "🍕",
-  "🍔",
-  "🍜",
-  "🥘",
-  "🍱",
-  "🌮",
-  "🥐",
-  "🍣",
-  "🍲",
-  "🥩",
-  "🍰",
-  "🦞",
-  "🌯",
-  "🍛",
-  "🫕",
-];
-
-// ── Copy ──────────────────────────────────────────────────────────────────────
-const pick = (a) => a[Math.floor(Math.random() * a.length)];
-
-const IDLE_HEADLINES = [
-  "Let the universe decide.",
-  "What's for dinner?",
-  "Leave it to fate.",
-  "Hungry? Spin.",
-];
-const IDLE_SUBLINES = [
-  "No scrolling. No deciding. Just cook.",
-  "One spin. Dinner sorted.",
-  "The wheel knows.",
-];
-const REVEAL_SUBLINES = [
-  "The universe has spoken.",
-  "No notes. Go cook.",
-  "This is what you're having.",
-  "Settled. Get the pan out.",
-  "Argue with it later.",
-  "Resistance is futile. Also delicious.",
-  "That's dinner. No appeals.",
-  "Don't make it weird. Just cook it.",
-  "Decided. Off you go.",
-  "Bold. Go with it.",
-  "That's the one. Trust it.",
-  "Cook it. Don't overthink it.",
-  "You'll thank fate for this one.",
-  "This one's a keeper. Move.",
-  "Fate's made the call. Honour it.",
-  "Stop scrolling. Start cooking.",
-  "It's chosen. You're cooking.",
-  "Good luck doing better.",
-];
-
-// Contextual verdict pools — flavour that nods to what actually landed.
-const DESSERT_LINES = [
-  "Dessert. No notes.",
-  "The universe wants you to have cake.",
-  "Straight to the good part, then.",
-  "Pudding counts as dinner. Officially, now.",
-];
-const BAKING_LINES = [
-  "Get the oven on.",
-  "Baking it is. Mind the timer.",
-  "Flour everywhere by tonight. Worth it.",
-];
-const BRINNER_LINES = [
-  "Breakfast. For dinner. The universe insists.",
-  "Eggs after dark. Why not.",
-  "Brinner. The wheel's feeling chaotic.",
-];
-const QUICK_LINES = [
-  "Quick one. You'll barely notice.",
-  "On the table before you change your mind.",
-  "Fast. The universe respects your time.",
-];
-const SLOW_LINES = [
-  "Clear the evening — this one takes a while.",
-  "A project. The universe believes in you.",
-  "Low and slow. Pour something.",
-];
-
-const REROLL_LABELS = [
-  "Not feeling it? Spin again",
-  "Again? Go on then",
-  "The universe is patient…",
-  "Truly? Once more",
-  "…you're impossible",
-  "Fine. Spin. (it was right the first time)",
-];
-
-// ── Helpers ─────────────────────────────────────────────────────────────────--
-const daypartNow = () => {
-  const h = new Date().getHours();
-  return h >= 5 && h < 11 ? "breakfast" : "dinner";
-};
-
-const sumTime = (t) => (t ? (t.hours || 0) * 60 + (t.minutes || 0) : 0);
-const totalMins = (r) => {
-  const tot = sumTime(r?.times?.total);
-  if (tot) return tot;
-  return sumTime(r?.times?.prep) + sumTime(r?.times?.cook);
-};
-const fmtMins = (m) =>
-  m < 60
-    ? `${m} min`
-    : m % 60
-      ? `${Math.floor(m / 60)}h ${m % 60}m`
-      : `${Math.floor(m / 60)}h`;
-
-const lc = (s) => (typeof s === "string" ? s.toLowerCase() : "");
-const hasAny = (hay, words) => words.some((w) => hay.includes(w));
-
-// Sometimes the verdict reflects what landed; otherwise a plain fate line —
-// kept ~60/40 so the nod stays a surprise rather than a pattern.
-const verdictFor = (recipe) => {
-  const hay = `${lc(recipe?.category)} ${lc(recipe?.cuisine)} ${lc(recipe?.name)}`;
-  const mins = totalMins(recipe);
-  const pools = [];
-
-  if (
-    hasAny(hay, [
-      "dessert",
-      "cake",
-      "cookie",
-      "brownie",
-      "pastry",
-      "pie",
-      "muffin",
-      "tart",
-      "pudding",
-      "cheesecake",
-      "cupcake",
-      "doughnut",
-      "donut",
-      "sweet",
-    ])
-  ) {
-    pools.push(DESSERT_LINES);
-  } else if (
-    hasAny(hay, [
-      "bread",
-      "loaf",
-      "bake",
-      "scone",
-      "biscuit",
-      "focaccia",
-      "bagel",
-    ])
-  ) {
-    pools.push(BAKING_LINES);
-  }
-
-  if (
-    daypartNow() === "dinner" &&
-    hasAny(hay, [
-      "breakfast",
-      "brunch",
-      "pancake",
-      "waffle",
-      "omelette",
-      "omelet",
-      "porridge",
-      "granola",
-      "french toast",
-      "cereal",
-    ])
-  ) {
-    pools.push(BRINNER_LINES);
-  }
-
-  if (mins && mins <= 20) pools.push(QUICK_LINES);
-  else if (mins && mins >= 90) pools.push(SLOW_LINES);
-
-  if (pools.length && Math.random() < 0.6) return pick(pick(pools));
-  return pick(REVEAL_SUBLINES);
-};
-
-const decodeStr = (s) => (typeof s === "string" ? he.decode(s) : s);
-const decodeRecipe = (r) => {
-  if (!r) return r;
-  return {
-    ...r,
-    name: decodeStr(r.name),
-    description: decodeStr(r.description),
-    category: decodeStr(r.category),
-    cuisine: decodeStr(r.cuisine),
-    recipeYield: decodeStr(r.recipeYield),
-    ingredients: Array.isArray(r.ingredients)
-      ? r.ingredients.map(decodeStr)
-      : r.ingredients,
-    instructions: Array.isArray(r.instructions)
-      ? r.instructions.map(decodeStr)
-      : r.instructions,
-  };
-};
-
-// One housing, three contents. Teal cabinet, orange win-lights.
-//   idle     → wheel, floating (no housing, no shadow)
-//   spinning → housing lifts in; emoji cycle behind the glass; reel-click haptics
-//   revealed → photo lands behind the same glass; gold markers flash; badge + share appear
-function Centerpiece({ phase, recipe, size, badge, onShare }) {
-  const spinnerRot = useRef(new Animated.Value(0)).current;
-  const wheelOpacity = useRef(new Animated.Value(1)).current;
-  const reelOpacity = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-  const bezelOpacity = useRef(new Animated.Value(0)).current;
-  const markerOpacity = useRef(new Animated.Value(0)).current;
-  const lockScale = useRef(new Animated.Value(1)).current;
-  const glow = useRef(new Animated.Value(0)).current;
-
-  const [symbol, setSymbol] = useState("🍳");
-  const tickRef = useRef(null);
-  const rotRef = useRef(0);
-  const prevPhase = useRef(phase);
-
-  const SP = size * 0.72;
-
-  const stopCycle = () => {
-    if (tickRef.current) clearTimeout(tickRef.current);
-  };
-  const startCycle = () => {
-    let step = 0;
-    const tick = () => {
-      step++;
-      const interval = 55 + Math.min(step / 40, 1) * 150;
-      setSymbol((p) => {
-        let n;
-        do {
-          n = REEL_SYMBOLS[Math.floor(Math.random() * REEL_SYMBOLS.length)];
-        } while (n === p && REEL_SYMBOLS.length > 1);
-        return n;
-      });
-      if (interval > 120) Haptics.selectionAsync().catch(() => {});
-      tickRef.current = setTimeout(tick, interval);
-    };
-    tickRef.current = setTimeout(tick, 55);
-  };
-
-  useEffect(() => {
-    const prev = prevPhase.current;
-    prevPhase.current = phase;
-
-    if (phase === "spinning") {
-      rotRef.current += 3 * 360;
-      Animated.timing(spinnerRot, {
-        toValue: rotRef.current,
-        duration: SPIN_DURATION,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-      lockScale.setValue(1);
-      Animated.parallel([
-        Animated.timing(wheelOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(reelOpacity, {
-          toValue: 1,
-          duration: 200,
-          delay: 80,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bezelOpacity, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.timing(markerOpacity, {
-          toValue: 0.85,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      startCycle();
-    } else if (phase === "revealed") {
-      stopCycle();
-      const doPop = prev === "spinning";
-      cardOpacity.setValue(0);
-      if (doPop) lockScale.setValue(0.86);
-      Animated.parallel([
-        Animated.timing(reelOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(wheelOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bezelOpacity, {
-          toValue: 1,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardOpacity, {
-          toValue: 1,
-          duration: 300,
-          delay: 50,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.spring(lockScale, {
-          toValue: 1,
-          friction: 4.5,
-          tension: 320,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      if (doPop) {
-        Animated.sequence([
-          Animated.timing(markerOpacity, {
-            toValue: 1,
-            duration: 80,
-            delay: 40,
-            useNativeDriver: true,
-          }),
-          Animated.timing(markerOpacity, {
-            toValue: 0.9,
-            duration: 420,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start();
-        Animated.sequence([
-          Animated.timing(glow, {
-            toValue: 1,
-            duration: 60,
-            delay: 40,
-            useNativeDriver: true,
-          }),
-          Animated.timing(glow, {
-            toValue: 0,
-            duration: 420,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]).start();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-      } else {
-        markerOpacity.setValue(0.9);
-      }
-    } else {
-      stopCycle();
-      Animated.parallel([
-        Animated.timing(wheelOpacity, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.timing(reelOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(cardOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bezelOpacity, {
-          toValue: 0,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.timing(markerOpacity, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [phase]);
-
-  useEffect(() => {
-    rotRef.current = 2.4 * 360;
-    Animated.timing(spinnerRot, {
-      toValue: rotRef.current,
-      duration: 1400,
-      delay: 400,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-    return stopCycle;
-  }, []);
-
-  const rotate = spinnerRot.interpolate({
-    inputRange: [0, 360],
-    outputRange: ["0deg", "360deg"],
-  });
-
-  return (
-    <Animated.View
-      style={[
-        cp.wrap,
-        { width: size, height: size, transform: [{ scale: lockScale }] },
-      ]}
-    >
-      {/* Drop shadow / lift — follows the housing so the idle wheel floats free */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, cp.lift, { opacity: bezelOpacity }]}
-      />
-
-      <View style={[StyleSheet.absoluteFill, cp.frame]}>
-        {/* Wheel face */}
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            cp.center,
-            { opacity: wheelOpacity },
-          ]}
-          pointerEvents="none"
-        >
-          <Animated.Image
-            source={require("../../assets/spinner.png")}
-            resizeMode="contain"
-            style={{
-              position: "absolute",
-              width: SP,
-              height: SP,
-              top: (size - SP) / 1.4,
-              left: (size - SP) / 2,
-              transform: [{ rotate }],
-            }}
-          />
-          <Image
-            source={require("../../assets/outer.png")}
-            resizeMode="contain"
-            style={{ width: size, height: size }}
-          />
-        </Animated.View>
-
-        {/* Reel face */}
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            cp.reelGround,
-            { opacity: reelOpacity },
-          ]}
-          pointerEvents="none"
-        >
-          <Text style={cp.symbol}>{symbol}</Text>
-        </Animated.View>
-
-        {/* Card face */}
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { opacity: cardOpacity }]}
-          pointerEvents="none"
-        >
-          {recipe?.image ? (
-            <Image
-              source={{ uri: recipe.image }}
-              resizeMode="cover"
-              fadeDuration={0}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                cp.center,
-                { backgroundColor: colors.primary + "15" },
-              ]}
-            >
-              <Text style={{ fontSize: size * 0.28 }}>🍽️</Text>
-            </View>
-          )}
-          <LinearGradient
-            colors={["transparent", "rgba(20,40,41,0.9)"]}
-            start={{ x: 0.5, y: 0.4 }}
-            end={{ x: 0.5, y: 1 }}
-            style={cp.scrim}
-          />
-          <Text style={cp.cardTitle} numberOfLines={2}>
-            {recipe?.name}
-          </Text>
-        </Animated.View>
-
-        {/* Teal housing */}
-        {/* Teal housing — lit glass instead of two flat bars:
-    top = teal rim giving way to a specular sheen; bottom = teal pooling at the foot */}
-        <Animated.View
-          style={[StyleSheet.absoluteFill, cp.bezel, { opacity: bezelOpacity }]}
-          pointerEvents="none"
-        >
-          <LinearGradient
-            colors={[
-              "rgba(20,40,41,0.20)",
-              "rgba(255,255,255,0.26)",
-              "rgba(255,255,255,0)",
-            ]}
-            locations={[0, 0.18, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={cp.glassSheen}
-          />
-          <LinearGradient
-            colors={["rgba(20,40,41,0)", "rgba(20,40,41,0.28)"]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={cp.glassFloor}
-          />
-        </Animated.View>
-
-        {/* Gold win-row markers */}
-        <Animated.View
-          style={[cp.markerLeft, { opacity: markerOpacity }]}
-          pointerEvents="none"
-        />
-        <Animated.View
-          style={[cp.markerRight, { opacity: markerOpacity }]}
-          pointerEvents="none"
-        />
-
-        {/* Win glow */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              backgroundColor: "#FF9800",
-              opacity: glow.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0.22],
-              }),
-            },
-          ]}
-        />
-
-        {/* Reading badge + share — live on the card itself, only when revealed */}
-        {phase === "revealed" && (
-          <>
-            {badge ? (
-              <Animated.View
-                style={[cp.badge, { opacity: cardOpacity }]}
-                pointerEvents="none"
-              >
-                <Text style={cp.badgeText}>{badge}</Text>
-              </Animated.View>
-            ) : null}
-
-            <Animated.View style={[cp.shareWrap, { opacity: cardOpacity }]}>
-              <TouchableOpacity
-                onPress={onShare}
-                style={cp.shareBtn}
-                activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Icon source="share-variant" size={17} color="#fff" />
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
-      </View>
-    </Animated.View>
-  );
-}
-
-const cp = StyleSheet.create({
-  wrap: { alignItems: "center", justifyContent: "center" },
-
-  lift: {
-    borderRadius: 26,
-    backgroundColor: "#fff",
-    shadowColor: "#142829",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-
-  frame: {
-    borderRadius: 26,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  center: { alignItems: "center", justifyContent: "center" },
-  reelGround: {
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  symbol: { fontSize: 96, lineHeight: 104 },
-
-  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
-  cardTitle: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 16,
-    fontFamily: "RalewayBold",
-    fontSize: 22,
-    lineHeight: 27,
-    color: "#fff",
-  },
-
-  // Teal cabinet — deeper border + tinted glass so the gold markers pop against it.
-  bezel: {
-    borderRadius: 26,
-    borderWidth: 3,
-    borderColor: "rgba(20,40,41,0.55)",
-  },
-  glassSheen: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "34%",
-  },
-  glassFloor: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "30%",
-  },
-
-  markerLeft: {
-    position: "absolute",
-    left: 6,
-    top: "50%",
-    marginTop: -7,
-    width: 0,
-    height: 0,
-    borderTopWidth: 7,
-    borderBottomWidth: 7,
-    borderLeftWidth: 10,
-    borderTopColor: "transparent",
-    borderBottomColor: "transparent",
-    borderLeftColor: "#FFB300",
-  },
-  markerRight: {
-    position: "absolute",
-    right: 6,
-    top: "50%",
-    marginTop: -7,
-    width: 0,
-    height: 0,
-    borderTopWidth: 7,
-    borderBottomWidth: 7,
-    borderRightWidth: 10,
-    borderTopColor: "transparent",
-    borderBottomColor: "transparent",
-    borderRightColor: "#FFB300",
-  },
-
-  badge: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "rgba(20,40,41,0.82)",
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    fontFamily: "RalewayBold",
-    fontSize: 10,
-    letterSpacing: 1,
-    color: "#fff",
-  },
-
-  shareWrap: { position: "absolute", top: 10, right: 10 },
-  shareBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(20,40,41,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
-
-// ── GraphQL ───────────────────────────────────────────────────────────────────
-const RANDOM_RECIPE = gql`
-  query RandomRecipe($excludeIds: [ID], $daypart: String) {
-    randomRecipe(excludeIds: $excludeIds, daypart: $daypart) {
-      id
-      name
-      description
-      image
-      ingredients
-      instructions
-      recipeYield
-      category
-      cuisine
-      sourceUrl
-      times {
-        cook {
-          hours
-          minutes
-        }
-        prep {
-          hours
-          minutes
-        }
-        total {
-          hours
-          minutes
-        }
-      }
-    }
-  }
-`;
-
-// Verdict, typed out as if some unseen hand is transmitting it — quote marks
-// frame the utterance, an orange caret leads, then vanishes when it's done.
-function TypewriterVerdict({ text }) {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    setCount(0);
-    if (!text) return;
-    let i = 0;
-    const id = setInterval(() => {
-      i += 1;
-      setCount(i);
-      if (i >= text.length) clearInterval(id);
-    }, 50);
-    return () => clearInterval(id);
-  }, [text]);
-
-  const full = text || "";
-  const shown = full.slice(0, count);
-  const typing = count < full.length;
-
-  return (
-    <Text style={styles.revealQuote}>
-      <Text style={styles.quoteMark}>“</Text>
-      {shown}
-      {typing ? <Text style={styles.caret}>|</Text> : null}
-      <Text style={styles.quoteMark}>”</Text>
-    </Text>
-  );
-}
 
 // ── Screen ──────────────────────────────────────────────────────────────────--
 export default function SpinScreen({ navigation }) {
@@ -1020,7 +283,7 @@ export default function SpinScreen({ navigation }) {
         >
           {booting ? null : isRevealed ? (
             <>
-              <TonightButton
+              <PotluckButton
                 icon="silverware-fork-knife"
                 title="See the recipe"
                 subtitle="Ingredients, steps, the lot"
@@ -1035,7 +298,7 @@ export default function SpinScreen({ navigation }) {
                 disabled={isSpinning || loading}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Icon source="refresh" size={18} color="#142829" />
+                <Icon source="refresh" size={18} color={colors.teal} />
                 <Text style={styles.rerollBtnLabel} numberOfLines={2}>
                   {rerollLabel}
                 </Text>
@@ -1045,7 +308,7 @@ export default function SpinScreen({ navigation }) {
             <Animated.View
               style={[styles.ctaWrap, { transform: [{ scale: scaleAnim }] }]}
             >
-              <TonightButton
+              <PotluckButton
                 icon="dice-multiple"
                 title="Spin"
                 subtitle={
@@ -1092,14 +355,14 @@ const styles = StyleSheet.create({
     fontFamily: "RalewayBold",
     fontSize: 22,
     lineHeight: 28,
-    color: "#142829",
+    color: colors.teal,
     textAlign: "center",
   },
   subline: {
     fontFamily: "Raleway",
     fontSize: 14,
     lineHeight: 18,
-    color: "#142829",
+    color: colors.teal,
     opacity: 0.55,
     textAlign: "center",
     marginTop: 4,
@@ -1108,21 +371,10 @@ const styles = StyleSheet.create({
     fontFamily: "RalewayBold",
     fontSize: 14,
     lineHeight: 20,
-    color: "#c0392b",
+    color: colors.error,
     textAlign: "center",
     opacity: 0.9,
   },
-
-  revealQuote: {
-    fontFamily: "RalewayBold",
-    fontSize: 19,
-    lineHeight: 26,
-    color: "#142829",
-    textAlign: "center",
-    paddingHorizontal: 4,
-  },
-  quoteMark: { fontFamily: "RalewayBold", fontSize: 24, color: "#FF9800" },
-  caret: { fontFamily: "RalewayBold", fontSize: 19, color: "#FF9800" },
 
   metaRow: {
     flexDirection: "row",
@@ -1133,14 +385,14 @@ const styles = StyleSheet.create({
   metaText: {
     fontFamily: "RalewaySemiBold",
     fontSize: 13,
-    color: "#142829",
+    color: colors.teal,
     opacity: 0.6,
   },
   metaDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: "#142829",
+    backgroundColor: colors.teal,
     opacity: 0.35,
     marginHorizontal: 10,
   },
@@ -1160,13 +412,13 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: "rgba(20,40,41,0.22)",
-    backgroundColor: "rgba(20,40,41,0.03)",
+    borderColor: tealAlpha(0.22),
+    backgroundColor: tealAlpha(0.03),
   },
   rerollBtnLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 14,
-    color: "#142829",
+    color: colors.teal,
     opacity: 0.85,
     textAlign: "center",
     flexShrink: 1,

@@ -21,7 +21,7 @@ import AboutSheet from "./AboutSheet";
  *   onLayout   — optional. Reports header height (for ComicBackground).
  */
 
-const DOT_COLORS = ["#FF9800", "#4caf50", "#26a69a"];
+const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"]; // orange from palette + two signature accents
 
 const WHEEL_SIZE = 38;
 
@@ -127,7 +127,7 @@ const PotluckHeader = ({ onBack, spinning = false, hasReading = false, onLayout 
                 style={styles.backBtn}
                 activeOpacity={0.6}
               >
-                <Icon source="chevron-left" size={28} color="#142829" />
+                <Icon source="chevron-left" size={28} color={colors.teal} />
               </TouchableOpacity>
             ) : (
               <HeaderWheel spinning={spinning} />

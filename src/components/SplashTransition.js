@@ -9,6 +9,7 @@ import {
   Text,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { colors } from "../constants/colors";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
 
@@ -35,16 +36,11 @@ const REEL_BOTTOM_GAP  = SCREEN_HEIGHT < 750 ? 200 : 260;
 
 // ── Brand palette ────────────────────────────────────────────────────────────
 
-const BRAND = {
-  teal:   "#142829",
-  orange: "#FF9800",
-  border: "#f0ebe6",
-  bg:     "#fffefe",
-};
+const SPLASH_BG = "#fffefe"; // splash-only near-white, matches native splash bg
 
-const SPIN_COLOR    = "#FF5722";
-const FOR_COLOR     = "#142829";
-const SUPPER_COLOR  = "#FF9800";
+const SPIN_COLOR   = colors.gradientStart;
+const FOR_COLOR    = colors.teal;
+const SUPPER_COLOR = colors.orange;
 
 // Tagline typed as one string across coloured segments. Trailing spaces live
 // inside the segments so word gaps come for free — and so no word's final
@@ -308,7 +304,7 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
               style={[
                 StyleSheet.absoluteFill,
                 {
-                  backgroundColor: BRAND.orange,
+                  backgroundColor: colors.orange,
                   borderRadius:    13,
                   opacity:         glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.22] }),
                 },
@@ -340,7 +336,7 @@ const styles = StyleSheet.create({
     left:            0,
     width:           SCREEN_WIDTH,
     height:          SCREEN_HEIGHT,
-    backgroundColor: BRAND.bg,
+    backgroundColor: SPLASH_BG,
     zIndex:          9999,
   },
 
@@ -369,12 +365,12 @@ const styles = StyleSheet.create({
     borderRadius:    16,
     backgroundColor: "#ffffff",
     borderWidth:     1.5,
-    borderColor:     BRAND.border,
+    borderColor:     colors.border,
     padding:         3,
     position:        "relative",
   },
   reelLocked: {
-    borderColor: BRAND.orange + "90",
+    borderColor: colors.orange + "90",
   },
   notch: {
     position:               "absolute",
@@ -382,7 +378,7 @@ const styles = StyleSheet.create({
     top:                    (REEL_HEIGHT / 2) - 8,
     width:                  5,
     height:                 16,
-    backgroundColor:        BRAND.orange,
+    backgroundColor:        colors.orange,
     borderTopLeftRadius:    3,
     borderBottomLeftRadius: 3,
     zIndex:                 2,

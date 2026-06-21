@@ -3,12 +3,12 @@ import { View, Text, StyleSheet } from "react-native";
 import { colors as C } from "../constants/colors";
 
 /**
- * TonightCard — matches Savor's Section card pattern from Settings.
+ * PotluckCard — matches Savor's Section card pattern from Settings.
  * White bg, 20px radius, subtle shadow, optional left-accent title.
  *
  * Props: title (optional), children, style
  */
-const TonightCard = ({ title, children, style }) => (
+const PotluckCard = ({ title, children, style }) => (
   <View style={[styles.card, style]}>
     {title ? (
       <View style={styles.titleRow}>
@@ -45,4 +45,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TonightCard;
+export default PotluckCard;
