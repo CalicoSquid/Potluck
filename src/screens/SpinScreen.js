@@ -8,6 +8,7 @@ import {
   Text,
   Image,
   TouchableOpacity,
+  Pressable,
   Dimensions,
   Share,
 } from "react-native";
@@ -17,13 +18,14 @@ import { Icon } from "react-native-paper";
 import { useLazyQuery } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import he from "he";
 
 import { colors } from "../constants/colors";
+import { getTodaysReading, setTodaysReading } from "../lib/readings";
 import TonightButton from "../components/TonightButton";
 import PotluckHeader from "../components/PotluckHeader";
 import ComicBackground from "../components/ComicBackground";
+import { TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -34,13 +36,8 @@ const WORDMARK_HEIGHT = WORDMARK_WIDTH / WORDMARK_ASPECT;
 
 const CENTER_SIZE   = SCREEN_WIDTH * 0.64;
 const SPIN_DURATION = 1800;
-const STORAGE_KEY   = "potluck_daily";
 
 const RECIPE_URL_BASE = "https://getsavor.recipes/r/"; // ← swap to getsavor.com/r/ if canonical
-
-// Teal = structure/action. Orange (wordmark + win-accents) = the spark.
-const TEAL_GRADIENT = ["#1a3536", "#0d1c1d"];
-const TEAL_SHADOW   = "#142829";
 
 const REEL_SYMBOLS = ["🍳","🥗","🍝","🍕","🍔","🍜","🥘","🍱","🌮","🥐","🍣","🍲","🥩","🍰","🦞","🌯","🍛","🫕"];
 
@@ -60,18 +57,23 @@ const IDLE_SUBLINES = [
 ];
 const REVEAL_SUBLINES = [
   "The universe has spoken.",
-  "Don't overthink it.",
-  "Trust the wheel.",
-  "That's the one.",
-  "Fate's made the call.",
   "No notes. Go cook.",
-  "Dinner, decided.",
-  "The wheel doesn't miss.",
   "This is what you're having.",
   "Settled. Get the pan out.",
-  "Argue with the universe later.",
-  "It chose. You cook.",
+  "Argue with it later.",
   "Resistance is futile. Also delicious.",
+  "That's dinner. No appeals.",
+  "Don't make it weird. Just cook it.",
+  "Decided. Off you go.",
+  "Bold. Go with it.",
+  "That's the one. Trust it.",
+  "Cook it. Don't overthink it.",
+  "You'll thank fate for this one.",
+  "This one's a keeper. Move.",
+  "Fate's made the call. Honour it.",
+  "Stop scrolling. Start cooking.",
+  "It's chosen. You're cooking.",
+  "Good luck doing better.",
 ];
 
 // Contextual verdict pools — flavour that nods to what actually landed.
@@ -112,11 +114,6 @@ const REROLL_LABELS = [
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────--
-const todayKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-};
-
 const daypartNow = () => {
   const h = new Date().getHours();
   return h >= 5 && h < 11 ? "breakfast" : "dinner";
@@ -424,13 +421,46 @@ const RANDOM_RECIPE = gql`
   }
 `;
 
+// Verdict, typed out as if some unseen hand is transmitting it — quote marks
+// frame the utterance, an orange caret leads, then vanishes when it's done.
+function TypewriterVerdict({ text }) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    setCount(0);
+    if (!text) return;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setCount(i);
+      if (i >= text.length) clearInterval(id);
+    }, 50);
+    return () => clearInterval(id);
+  }, [text]);
+
+  const full   = text || "";
+  const shown  = full.slice(0, count);
+  const typing = count < full.length;
+
+  return (
+    <Text style={styles.revealQuote}>
+      <Text style={styles.quoteMark}>“</Text>
+      {shown}
+      {typing ? <Text style={styles.caret}>|</Text> : null}
+      <Text style={styles.quoteMark}>”</Text>
+    </Text>
+  );
+}
+
 // ── Screen ──────────────────────────────────────────────────────────────────--
 export default function SpinScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
   const [phase,           setPhase]           = useState("idle"); // idle | spinning | revealed
   const [recipe,          setRecipe]          = useState(null);
-  const [isReading,       setIsReading]       = useState(false);
+  const [readingId,       setReadingId]       = useState(null);   // id of today's canonical reading
+  const [hadReadingOnOpen,setHadReadingOnOpen]= useState(false);  // drives the header's one-shot pulse
+  const [booting,         setBooting]         = useState(true);   // gates first paint until the reading read resolves
   const [hasReadingToday, setHasReadingToday] = useState(false);
   const [sessionSpins,    setSessionSpins]    = useState(0);
   const [seenIds,         setSeenIds]         = useState([]);
@@ -446,20 +476,21 @@ export default function SpinScreen({ navigation }) {
 
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (cancelled || !raw) return;
-        try {
-          const saved = JSON.parse(raw);
-          if (saved?.date === todayKey()) {
-            setHasReadingToday(true);
-            if (saved.recipe?.id) setSeenIds([saved.recipe.id]);
-          }
-        } catch {
-          AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-        }
+    getTodaysReading()
+      .then((entry) => {
+        if (cancelled || !entry?.recipe?.id) return;
+        const r = entry.recipe;
+        // Open straight into today's reading instead of a blank wheel.
+        setRecipe(r);
+        setSeenIds([r.id]);
+        setReadingId(r.id);
+        setHasReadingToday(true);
+        setHadReadingOnOpen(true);
+        setRevealSub(verdictFor(r));
+        setPhase("revealed");
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setBooting(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -503,13 +534,14 @@ export default function SpinScreen({ navigation }) {
         setRevealSub(verdictFor(picked));
         setPhase("revealed");
 
+        // First spin of the day becomes the canonical reading. Later rerolls
+        // reveal normally but never claim the badge or disturb the stored pick
+        // (setTodaysReading no-ops on an existing, uncommitted entry).
         if (!hasReadingToday) {
           setHasReadingToday(true);
-          setIsReading(true);
-          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayKey(), recipe: picked })).catch(() => {});
-        } else {
-          setIsReading(false);
+          setReadingId(picked.id);
         }
+        setTodaysReading(picked, { committed: false });
       })
       .catch(() => recover("Something went wrong. Give it another spin."));
   }, [phase, loading, seenIds, recipe, hasReadingToday]);
@@ -541,33 +573,44 @@ export default function SpinScreen({ navigation }) {
 
       {headerHeight > 0 && <ComicBackground headerHeight={headerHeight} />}
 
-      <PotluckHeader spinning={isSpinning} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)} />
+      <PotluckHeader spinning={isSpinning} hasReading={hadReadingOnOpen} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)} />
 
       <View style={styles.body}>
         <View style={styles.wordmarkSlot}>
           <Image
-            source={require("../../assets/pbs5.png")}
+            source={require("../../assets/potluck_wordmark.webp")}
             style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
             resizeMode="contain"
           />
         </View>
 
         <View style={styles.hero}>
-          <Centerpiece
-            phase={phase}
-            recipe={recipe}
-            size={CENTER_SIZE}
-            badge={isReading ? "TODAY'S READING" : null}
-            onShare={handleShare}
-          />
+          {!booting && (
+            <Pressable
+              onPress={isRevealed ? handleSeeRecipe : handleSpin}
+              disabled={isSpinning || loading}
+              style={({ pressed }) => [
+                styles.wheelTap,
+                pressed && !isSpinning && { transform: [{ scale: 0.97 }] },
+              ]}
+            >
+              <Centerpiece
+                phase={phase}
+                recipe={recipe}
+                size={CENTER_SIZE}
+                badge={isRevealed && recipe?.id === readingId ? "TODAY'S READING" : null}
+                onShare={handleShare}
+              />
+            </Pressable>
+          )}
 
           <View style={styles.content}>
-            {isRevealed ? (
+            {booting ? null : isRevealed ? (
               errorMsg ? (
                 <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
               ) : (
                 <>
-                  <Text style={styles.revealSub}>{revealSub}</Text>
+                  <TypewriterVerdict text={revealSub} />
                   {(timeStr || yieldStr) && (
                     <View style={styles.metaRow}>
                       {timeStr && <Text style={styles.metaText}>⏱  {timeStr}</Text>}
@@ -589,9 +632,8 @@ export default function SpinScreen({ navigation }) {
             )}
           </View>
         </View>
-
         <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {isRevealed ? (
+          {booting ? null : isRevealed ? (
             <>
               <TonightButton
                 icon="silverware-fork-knife"
@@ -603,12 +645,13 @@ export default function SpinScreen({ navigation }) {
               />
               <TouchableOpacity
                 onPress={handleSpin}
-                style={styles.rerollLink}
-                activeOpacity={0.6}
+                style={styles.rerollBtn}
+                activeOpacity={0.7}
                 disabled={isSpinning || loading}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Text style={styles.rerollLabel} numberOfLines={2}>↻  {rerollLabel}</Text>
+                <Icon source="refresh" size={18} color="#142829" />
+                <Text style={styles.rerollBtnLabel} numberOfLines={2}>{rerollLabel}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -644,7 +687,9 @@ const styles = StyleSheet.create({
   subline:  { fontFamily: "Raleway", fontSize: 14, lineHeight: 18, color: "#142829", opacity: 0.55, textAlign: "center", marginTop: 4 },
   errorText: { fontFamily: "RalewayBold", fontSize: 14, lineHeight: 20, color: "#c0392b", textAlign: "center", opacity: 0.9 },
 
-  revealSub: { fontFamily: "Raleway", fontSize: 14, lineHeight: 18, color: "#142829", opacity: 0.55, textAlign: "center" },
+  revealQuote: { fontFamily: "RalewayBold", fontSize: 19, lineHeight: 26, color: "#142829", textAlign: "center", paddingHorizontal: 4 },
+  quoteMark:   { fontFamily: "RalewayBold", fontSize: 24, color: "#FF9800" },
+  caret:       { fontFamily: "RalewayBold", fontSize: 19, color: "#FF9800" },
 
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 8 },
   metaText: { fontFamily: "RalewaySemiBold", fontSize: 13, color: "#142829", opacity: 0.6 },
@@ -653,6 +698,27 @@ const styles = StyleSheet.create({
   actions: { width: "100%" },
   ctaWrap: { width: "100%" },
 
-  rerollLink: { marginTop: 12, width: "100%", alignItems: "center", paddingVertical: 4 },
-  rerollLabel: { fontFamily: "RalewaySemiBold", fontSize: 13, color: "#142829", opacity: 0.5, textAlign: "center" },
+  wheelTap: { alignItems: "center", justifyContent: "center" },
+
+  rerollBtn: {
+    marginTop: 12,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "rgba(20,40,41,0.22)",
+    backgroundColor: "rgba(20,40,41,0.03)",
+  },
+  rerollBtnLabel: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 14,
+    color: "#142829",
+    opacity: 0.85,
+    textAlign: "center",
+    flexShrink: 1,
+  },
 });

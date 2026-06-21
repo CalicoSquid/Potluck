@@ -14,3 +14,6 @@ export const colors = {
   border:        "#F0E8E0",
   black:         "#000000",
 };
+
+export const TEAL_GRADIENT = ["#1a3536", "#0d1c1d"];
+export const TEAL_SHADOW   = "#142829";

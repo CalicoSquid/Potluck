@@ -21,6 +21,7 @@ import PotluckHeader from "../components/PotluckHeader";
 import InlineTimes from "../components/InlineTimes";
 import IngredientList from "../components/IngredientList";
 import ShopTab from "../components/ShopTab";
+import { TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -229,6 +230,8 @@ export default function RecipeScreen({ navigation, route }) {
           icon="pot-steam-outline"
           title="Making this"
           subtitle="Lock it in and go cook"
+          gradientColors={TEAL_GRADIENT}
+          shadowColor={TEAL_SHADOW}
           onPress={() => navigation.navigate("Done", { recipe })}
         />
 

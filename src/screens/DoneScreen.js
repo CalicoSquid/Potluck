@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../constants/colors";
+import { setTodaysReading } from "../lib/readings";
 import TonightButton from "../components/TonightButton";
 import PotluckHeader from "../components/PotluckHeader";
 
@@ -42,6 +43,12 @@ export default function DoneScreen({ navigation, route }) {
   const [eyebrow] = useState(() => pick(EYEBROWS));
   const [closer]  = useState(() => pick(CLOSERS)(recipe?.name ?? "dinner"));
   const [exhale]  = useState(() => pick(EXHALES));
+
+  // Reaching Done is the commitment signal — this dish becomes today's
+  // reading, overriding whatever the universe first served.
+  useEffect(() => {
+    if (recipe?.id) setTodaysReading(recipe, { committed: true });
+  }, []);
 
   const handleSave = () => {
     if (!recipe) return;

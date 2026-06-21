@@ -46,6 +46,17 @@ const SPIN_COLOR    = "#FF5722";
 const FOR_COLOR     = "#142829";
 const SUPPER_COLOR  = "#FF9800";
 
+// Tagline typed as one string across coloured segments. Trailing spaces live
+// inside the segments so word gaps come for free — and so no word's final
+// glyph is ever the last character of its Text node (which is what was
+// clipping the "n" in "Spin").
+const TAGLINE = [
+  { text: "Spin ",     color: SPIN_COLOR,   size: 20, family: "RalewaySemiBold", opacity: 1    },
+  { text: "for your ", color: FOR_COLOR,    size: 15, family: "Raleway",         opacity: 0.85 },
+  { text: "Supper",    color: SUPPER_COLOR, size: 24, family: "RalewayBold",     opacity: 1    },
+];
+const TAGLINE_LEN = TAGLINE.reduce((n, s) => n + s.text.length, 0);
+
 // ── Slot symbols ─────────────────────────────────────────────────────────────
 
 const SPIN_SYMBOLS = [
@@ -99,13 +110,9 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
   const [spinSymbol, setSpinSymbol] = useState(SPIN_SYMBOLS[0]);
   const [locked, setLocked] = useState(false);
 
-  // Tagline word stagger
-  const word1Opacity = useRef(new Animated.Value(0)).current;
-  const word2Opacity = useRef(new Animated.Value(0)).current;
-  const word3Opacity = useRef(new Animated.Value(0)).current;
-  const word1Y       = useRef(new Animated.Value(8)).current;
-  const word2Y       = useRef(new Animated.Value(8)).current;
-  const word3Y       = useRef(new Animated.Value(8)).current;
+  // Tagline typewriter
+  const [taglineCount, setTaglineCount] = useState(0);
+  const typeRef = useRef(null);
 
   const layoutFiredRef = useRef(false);
 
@@ -115,22 +122,24 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
     onReadyToPaint?.();
   };
 
-  // ── Word entrance helper ───────────────────────────────────────────────
-  const wordAnim = (opacity, y) =>
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue:         1,
-        duration:        260,
-        easing:          Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(y, {
-        toValue:         0,
-        duration:        260,
-        easing:          Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]);
+  // ── Tagline renderer ───────────────────────────────────────────────────
+  // Reveals the phrase left-to-right across the coloured segments.
+  const renderTagline = () => {
+    let remaining = taglineCount;
+    return TAGLINE.map((seg, i) => {
+      const take = Math.max(0, Math.min(seg.text.length, remaining));
+      remaining -= seg.text.length;
+      if (take <= 0) return null;
+      return (
+        <Text
+          key={i}
+          style={{ fontFamily: seg.family, fontSize: seg.size, color: seg.color, opacity: seg.opacity }}
+        >
+          {seg.text.slice(0, take)}
+        </Text>
+      );
+    });
+  };
 
   // ── Container fade-out ─────────────────────────────────────────────────
   const fadeOut = () => {
@@ -162,13 +171,15 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
 
     setTimeout(() => {
-      Animated.stagger(140, [
-        wordAnim(word1Opacity, word1Y),
-        wordAnim(word2Opacity, word2Y),
-        wordAnim(word3Opacity, word3Y),
-      ]).start(() => {
-        setTimeout(fadeOut, 260);
-      });
+      let i = 0;
+      typeRef.current = setInterval(() => {
+        i += 1;
+        setTaglineCount(i);
+        if (i >= TAGLINE_LEN) {
+          clearInterval(typeRef.current);
+          setTimeout(fadeOut, 700);
+        }
+      }, 45);
     }, 200);
   };
 
@@ -243,6 +254,7 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
       clearTimeout(reelAppearTimer);
       clearTimeout(startCyclingTimer);
       clearTimeout(tickRef.current);
+      clearInterval(typeRef.current);
     };
   }, [fontsReady]);
 
@@ -309,32 +321,12 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
         </Animated.View>
       </Animated.View>
 
-      {/* ── Tagline ── */}
+      {/* ── Tagline (typed) ── */}
       <View style={styles.tagline}>
-        <Animated.Text
-          style={[
-            styles.wordSpin,
-            { opacity: word1Opacity, transform: [{ translateY: word1Y }] },
-          ]}
-        >
-          Spin
-        </Animated.Text>
-        <Animated.Text
-          style={[
-            styles.wordFor,
-            { opacity: word2Opacity, transform: [{ translateY: word2Y }] },
-          ]}
-        >
-          for your
-        </Animated.Text>
-        <Animated.Text
-          style={[
-            styles.wordSupper,
-            { opacity: word3Opacity, transform: [{ translateY: word3Y }] },
-          ]}
-        >
-          Supper
-        </Animated.Text>
+        <Text style={styles.taglineText} numberOfLines={1}>
+          {renderTagline()}
+          {taglineCount < TAGLINE_LEN ? <Text style={styles.caret}>|</Text> : null}
+        </Text>
       </View>
 
     </Animated.View>
@@ -436,32 +428,21 @@ const styles = StyleSheet.create({
 
   // ── Tagline ───────────────────────────────────────────────────────────
   tagline: {
-    position:       "absolute",
-    bottom:         REEL_BOTTOM_GAP - 76,
-    left:           0,
-    right:          0,
-    flexDirection:  "row",
-    alignItems:     "baseline",
-    justifyContent: "center",
-    gap:            7,
+    position:   "absolute",
+    bottom:     REEL_BOTTOM_GAP - 76,
+    left:       0,
+    right:      0,
+    alignItems: "center",
   },
-  wordSpin: {
-    fontSize:      20,
-    fontFamily:    "RalewaySemiBold",
-    color:         SPIN_COLOR,
+  taglineText: {
+    textAlign:         "center",
+    lineHeight:        30,
+    paddingHorizontal: 4,
   },
-  wordFor: {
-    fontSize:      15,
-    fontFamily:    "Raleway",
-    color:         FOR_COLOR,
-    opacity:       0.85,
-    letterSpacing: 0.3,
-  },
-  wordSupper: {
-    fontSize:      24,
-    fontFamily:    "RalewayBold",
-    color:         SUPPER_COLOR,
-    letterSpacing: 0.4,
+  caret: {
+    fontFamily: "RalewayBold",
+    fontSize:   22,
+    color:      SUPPER_COLOR,
   },
 });
 

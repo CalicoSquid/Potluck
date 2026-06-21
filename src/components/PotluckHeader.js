@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, Image, TouchableOpacity, Animated } from "react-native";
+import { View, StyleSheet, Image, TouchableOpacity, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "react-native-paper";
@@ -8,40 +8,85 @@ import AboutSheet from "./AboutSheet";
 
 /**
  * PotluckHeader — shared header for all Potluck screens.
- *   - Left:  Savor logo (home) OR back chevron (other screens)
- *   - Right: the three-dot brand signature. Solid at rest; pulses left→right
- *            while a spin is in flight; taps open the About sheet.
+ *   - Left:  the wheel brand-mark (home) OR back chevron (other screens). On
+ *            the home screen the wheel's rainbow spins on every spin.
+ *   - Right: the three-dot brand signature. Solid at rest; gives one calm
+ *            pulse when a fresh reading is waiting; taps open the About sheet.
  *   - Bottom: 3px orange gradient thread.
  *
  * Props:
- *   onBack    — optional. If provided, shows back chevron instead of logo.
- *   spinning  — optional. When true, the signature dots pulse in sequence.
- *   onLayout  — optional. Reports header height (for ComicBackground).
+ *   onBack     — optional. If provided, shows back chevron instead of the wheel.
+ *   spinning   — optional. When true, the home wheel spins.
+ *   hasReading — optional. When true, the signature pulses once on open.
+ *   onLayout   — optional. Reports header height (for ComicBackground).
  */
 
 const DOT_COLORS = ["#FF9800", "#4caf50", "#26a69a"];
 
-const Signature = ({ spinning, onPress }) => {
-  const dots = useRef(DOT_COLORS.map(() => new Animated.Value(0))).current;
-  const loopRef = useRef(null);
+const WHEEL_SIZE = 38;
+
+// The header brand-mark, layered like the Centerpiece so only the rainbow
+// turns inside the static ring + leaves. Spins and decelerates on each spin —
+// the logo finally doing what it's shaped to do, in sync with the reel.
+const HeaderWheel = ({ spinning }) => {
+  const rot   = useRef(new Animated.Value(0)).current;
+  const turns = useRef(0);
 
   useEffect(() => {
-    if (spinning) {
-      const pulse = (v) =>
-        Animated.sequence([
-          Animated.timing(v, { toValue: 1, duration: 160, useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0, duration: 260, useNativeDriver: true }),
-        ]);
-      loopRef.current = Animated.loop(Animated.stagger(130, dots.map(pulse)));
-      loopRef.current.start();
-    } else {
-      loopRef.current?.stop();
-      dots.forEach((v) =>
-        Animated.timing(v, { toValue: 0, duration: 180, useNativeDriver: true }).start()
-      );
-    }
-    return () => loopRef.current?.stop();
+    if (!spinning) return;
+    turns.current += 4;
+    Animated.timing(rot, {
+      toValue: turns.current,
+      duration: 1700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   }, [spinning]);
+
+  const spin = rot.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const SP = WHEEL_SIZE * 0.72;
+
+  return (
+    <View style={{ width: WHEEL_SIZE, height: WHEEL_SIZE, alignItems: "center", justifyContent: "center" }}>
+      <Animated.Image
+        source={require("../../assets/spinner.png")}
+        resizeMode="contain"
+        style={{
+          position: "absolute",
+          width: SP,
+          height: SP,
+          top: (WHEEL_SIZE - SP) / 1.4,
+          left: (WHEEL_SIZE - SP) / 2,
+          transform: [{ rotate: spin }],
+        }}
+      />
+      <Image
+        source={require("../../assets/outer.png")}
+        resizeMode="contain"
+        style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}
+      />
+    </View>
+  );
+};
+
+const Signature = ({ spinning, hasReading = false, onPress }) => {
+  const dots = useRef(DOT_COLORS.map(() => new Animated.Value(0))).current;
+  const greetedRef = useRef(false);
+
+  // One calm pulse on open when today already has a reading waiting — a
+  // heartbeat, not a notification. Fires once per mount (i.e. per app open).
+  // (The spin-activity signal now lives in the wheel, so the pips stay still
+  // during a spin.)
+  useEffect(() => {
+    if (!hasReading || greetedRef.current || spinning) return;
+    greetedRef.current = true;
+    const pulse = (v) =>
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(v, { toValue: 0, duration: 340, useNativeDriver: true }),
+      ]);
+    Animated.stagger(120, dots.map(pulse)).start();
+  }, [hasReading, spinning]);
 
   return (
     <TouchableOpacity
@@ -67,7 +112,7 @@ const Signature = ({ spinning, onPress }) => {
   );
 };
 
-const PotluckHeader = ({ onBack, spinning = false, onLayout }) => {
+const PotluckHeader = ({ onBack, spinning = false, hasReading = false, onLayout }) => {
   const [aboutVisible, setAboutVisible] = useState(false);
 
   return (
@@ -85,15 +130,11 @@ const PotluckHeader = ({ onBack, spinning = false, onLayout }) => {
                 <Icon source="chevron-left" size={28} color="#142829" />
               </TouchableOpacity>
             ) : (
-              <Image
-                source={require("../../assets/potluck-splash.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+              <HeaderWheel spinning={spinning} />
             )}
           </View>
 
-          <Signature spinning={spinning} onPress={() => setAboutVisible(true)} />
+          <Signature spinning={spinning} hasReading={hasReading} onPress={() => setAboutVisible(true)} />
         </View>
       </SafeAreaView>
 
@@ -119,9 +160,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
   },
-  leftSlot: { minWidth: 32, minHeight: 32, alignItems: "flex-start", justifyContent: "center" },
+  leftSlot: { minWidth: 40, minHeight: 38, alignItems: "flex-start", justifyContent: "center" },
   backBtn: { width: 32, height: 32, marginLeft: -6, alignItems: "center", justifyContent: "center" },
-  logo: { width: 30, height: 30 },
 
   signature: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 6, paddingLeft: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
