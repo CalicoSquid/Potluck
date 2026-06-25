@@ -38,20 +38,11 @@ const REEL_BOTTOM_GAP  = SCREEN_HEIGHT < 750 ? 200 : 260;
 
 const SPLASH_BG = "#fffefe"; // splash-only near-white, matches native splash bg
 
-const SPIN_COLOR   = colors.gradientStart;
-const FOR_COLOR    = colors.teal;
-const SUPPER_COLOR = colors.orange;
 
-// Tagline typed as one string across coloured segments. Trailing spaces live
-// inside the segments so word gaps come for free — and so no word's final
-// glyph is ever the last character of its Text node (which is what was
-// clipping the "n" in "Spin").
-const TAGLINE = [
-  { text: "Spin ",     color: SPIN_COLOR,   size: 20, family: "RalewaySemiBold", opacity: 1    },
-  { text: "for your ", color: FOR_COLOR,    size: 15, family: "Raleway",         opacity: 0.85 },
-  { text: "Supper",    color: SUPPER_COLOR, size: 24, family: "RalewayBold",     opacity: 1    },
-];
-const TAGLINE_LEN = TAGLINE.reduce((n, s) => n + s.text.length, 0);
+// Tagline typed out and styled to match the verdict "voice" (TypewriterVerdict):
+// one uniform teal/bold line, framed by orange quote marks, with an orange caret.
+const TAGLINE_TEXT = "Spin for your Supper";
+const TAGLINE_LEN  = TAGLINE_TEXT.length;
 
 // ── Slot symbols ─────────────────────────────────────────────────────────────
 
@@ -116,25 +107,6 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
     if (layoutFiredRef.current) return;
     layoutFiredRef.current = true;
     onReadyToPaint?.();
-  };
-
-  // ── Tagline renderer ───────────────────────────────────────────────────
-  // Reveals the phrase left-to-right across the coloured segments.
-  const renderTagline = () => {
-    let remaining = taglineCount;
-    return TAGLINE.map((seg, i) => {
-      const take = Math.max(0, Math.min(seg.text.length, remaining));
-      remaining -= seg.text.length;
-      if (take <= 0) return null;
-      return (
-        <Text
-          key={i}
-          style={{ fontFamily: seg.family, fontSize: seg.size, color: seg.color, opacity: seg.opacity }}
-        >
-          {seg.text.slice(0, take)}
-        </Text>
-      );
-    });
   };
 
   // ── Container fade-out ─────────────────────────────────────────────────
@@ -317,11 +289,14 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
         </Animated.View>
       </Animated.View>
 
-      {/* ── Tagline (typed) ── */}
+      {/* ── Tagline (typed) — styled identically to the verdict "voice" ── */}
       <View style={styles.tagline}>
         <Text style={styles.taglineText} numberOfLines={1}>
-          {renderTagline()}
-          {taglineCount < TAGLINE_LEN ? <Text style={styles.caret}>|</Text> : null}
+          {taglineCount > 0 ? <Text style={styles.quoteMark}>“</Text> : null}
+          {TAGLINE_TEXT.slice(0, taglineCount)}
+          {taglineCount < TAGLINE_LEN
+            ? <Text style={styles.caret}>|</Text>
+            : <Text style={styles.quoteMark}>”</Text>}
         </Text>
       </View>
 
@@ -431,14 +406,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   taglineText: {
+    fontFamily:        "RalewayBold",
+    fontSize:          19,
+    lineHeight:        26,
+    color:             colors.teal,
     textAlign:         "center",
-    lineHeight:        30,
     paddingHorizontal: 4,
+  },
+  quoteMark: {
+    fontFamily: "RalewayBold",
+    fontSize:   24,
+    color:      colors.orange,
   },
   caret: {
     fontFamily: "RalewayBold",
-    fontSize:   22,
-    color:      SUPPER_COLOR,
+    fontSize:   19,
+    color:      colors.orange,
   },
 });
 
