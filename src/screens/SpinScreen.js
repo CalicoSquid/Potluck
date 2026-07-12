@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   Pressable,
   Dimensions,
-  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "react-native-paper";
@@ -47,8 +46,6 @@ const WORDMARK_HEIGHT = WORDMARK_WIDTH / WORDMARK_ASPECT;
 
 const CENTER_SIZE = SCREEN_WIDTH * 0.64;
 const SPIN_DURATION = 1800;
-
-const RECIPE_URL_BASE = "https://getsavor.recipes/r/"; // ← swap to getsavor.com/r/ if canonical
 
 // ── Screen ──────────────────────────────────────────────────────────────────--
 export default function SpinScreen({ navigation }) {
@@ -181,15 +178,6 @@ export default function SpinScreen({ navigation }) {
     if (recipe) navigation.navigate("Recipe", { recipe });
   }, [recipe, navigation]);
 
-  const handleShare = useCallback(() => {
-    if (!recipe) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const url = `${RECIPE_URL_BASE}${recipe.id}`;
-    Share.share({
-      message: `The universe says I'm making ${recipe.name} tonight. 🎰\n\nSpin yours in Potluck:\n${url}`,
-    }).catch(() => {});
-  }, [recipe]);
-
   const isSpinning = phase === "spinning";
   const isRevealed = phase === "revealed" && !!recipe;
   const rerollLabel =
@@ -245,37 +233,38 @@ export default function SpinScreen({ navigation }) {
                     ? "LOCKED IN"
                     : null
                 }
-                onShare={handleShare}
               />
             </Pressable>
           )}
 
           <View style={styles.content}>
             {booting ? null : isRevealed ? (
-              errorMsg ? (
-                <Text style={styles.errorText} numberOfLines={2}>
-                  {errorMsg}
-                </Text>
-              ) : (
-                <>
-                  <TypewriterVerdict text={revealSub} />
-                  {(timeStr || yieldStr) && (
-                    <View style={styles.metaRow}>
-                      {timeStr && (
-                        <Text style={styles.metaText}>⏱ {timeStr}</Text>
-                      )}
-                      {timeStr && yieldStr ? (
-                        <View style={styles.metaDot} />
-                      ) : null}
-                      {yieldStr && (
-                        <Text style={styles.metaText} numberOfLines={1}>
-                          🍽 {yieldStr}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </>
-              )
+              <>
+                <TypewriterVerdict text={revealSub} />
+                {(timeStr || yieldStr) && (
+                  <View style={styles.metaRow}>
+                    {timeStr && (
+                      <Text style={styles.metaText}>⏱ {timeStr}</Text>
+                    )}
+                    {timeStr && yieldStr ? (
+                      <View style={styles.metaDot} />
+                    ) : null}
+                    {yieldStr && (
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        🍽 {yieldStr}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                {/* A failed reroll keeps the current dish on screen — surface
+                    the error *below* the verdict so it reads as "that spin
+                    didn't take", not "this dish is broken". */}
+                {errorMsg ? (
+                  <Text style={styles.errorLine} numberOfLines={2}>
+                    {errorMsg}
+                  </Text>
+                ) : null}
+              </>
             ) : isSpinning ? (
               <Text style={styles.headline}>The universe is deciding…</Text>
             ) : errorMsg ? (
@@ -396,6 +385,15 @@ const styles = StyleSheet.create({
     color: colors.error,
     textAlign: "center",
     opacity: 0.9,
+  },
+  errorLine: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.error,
+    textAlign: "center",
+    opacity: 0.8,
+    marginTop: 8,
   },
 
   metaRow: {

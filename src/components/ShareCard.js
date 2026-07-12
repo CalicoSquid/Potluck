@@ -52,7 +52,7 @@ const ShareCard = forwardRef(
           style={styles.wordmark}
           resizeMode="contain"
         />
-        <Text style={styles.eyebrow}>SPIN YOUR OWN DINNER</Text>
+        <Text style={styles.eyebrow}>SPIN FOR YOUR SUPPER</Text>
         <Text style={styles.domain}>getsavor.recipes</Text>
       </View>
     </View>

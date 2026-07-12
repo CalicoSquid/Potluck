@@ -97,6 +97,7 @@ export default function DoneScreen({ navigation, route }) {
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
   const pendingShareRef = useRef(false);
+  const shareTimeoutRef = useRef(null);
 
   const timeStr = fmtTotal(recipe);
   const yieldStr = recipe?.recipeYield || null;
@@ -105,6 +106,9 @@ export default function DoneScreen({ navigation, route }) {
   // overriding whatever the universe first served (or an earlier commitment).
   useEffect(() => {
     if (recipe?.id) commitTodaysPick(recipe);
+    return () => {
+      if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
+    };
   }, []);
 
   // Fallback: plain text + link share. Used when the card can't be produced —
@@ -161,6 +165,7 @@ export default function DoneScreen({ navigation, route }) {
     setImgLoaded(true);
     if (pendingShareRef.current) {
       pendingShareRef.current = false;
+      if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
       runCardShare();
     }
   };
@@ -171,6 +176,7 @@ export default function DoneScreen({ navigation, route }) {
     setImgLoaded(true);
     if (pendingShareRef.current) {
       pendingShareRef.current = false;
+      if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
       setSharing(false);
       fallbackTextShare();
     }
@@ -182,8 +188,17 @@ export default function DoneScreen({ navigation, route }) {
     if (imgFailed) return fallbackTextShare();
     if (recipe.image && !imgLoaded) {
       // Photo still loading — show the spinner and fire the moment it's ready.
+      // But don't wait forever: a stalled image (dodgy connection, silent CDN
+      // hang) never resolves onLoad/onError, which would trap the button in
+      // "Conjuring…". After 8s, give up on the poster and share text + link.
       pendingShareRef.current = true;
       setSharing(true);
+      shareTimeoutRef.current = setTimeout(() => {
+        if (!pendingShareRef.current) return;
+        pendingShareRef.current = false;
+        setSharing(false);
+        fallbackTextShare();
+      }, 8000);
       return;
     }
     runCardShare();

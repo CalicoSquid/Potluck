@@ -42,11 +42,10 @@ const persist = (list) =>
   AsyncStorage.setItem(KEY, JSON.stringify(list)).catch(() => {});
 
 // The "This Week" diary — a record of what you committed to cook, newest-first.
-// Only committed picks surface: uncommitted fate-spins still live in storage
-// (they power "today's reading" on the wheel) but never clutter the log. A list
-// of dishes you rerolled past and never made is a diary of nothing; this is a
-// diary of keepers — which is the whole reason to send one to Savor.
-// Still prunes + persists the full list so expired entries actually go.
+// Only committed picks are ever stored (commitTodaysPick is the sole writer),
+// so this is a diary of keepers, not a log of dishes you rerolled past and never
+// made — which is the whole reason to send one to Savor. The committed filter is
+// belt-and-braces; prune + persist still run so expired entries actually go.
 export const loadReadings = async () => {
   const list = prune(await loadRaw()).sort((a, b) => b.ts - a.ts);
   persist(list);

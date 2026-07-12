@@ -5,7 +5,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const KEY = "potluck_onboarded_v1";
+const KEY = "potluck_onboarded_v2";
 
 // Resolves true if the user has already seen the intro. Fails open to `true`
 // on a storage error so a broken read never traps someone in the sheet.

@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, Animated, Easing, Text, Image, TouchableOpacity } from "react-native";
+import { View, StyleSheet, Animated, Easing, Text, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Icon } from "react-native-paper";
 import * as Haptics from "expo-haptics";
 
 import { colors, tealAlpha } from "../constants/colors";
@@ -32,8 +31,8 @@ const REEL_SYMBOLS = [
 // One housing, three contents. Teal cabinet, orange win-lights.
 //   idle     → wheel, floating (no housing, no shadow)
 //   spinning → housing lifts in; emoji cycle behind the glass; reel-click haptics
-//   revealed → photo lands behind the same glass; gold markers flash; badge + share appear
-export default function Centerpiece({ phase, recipe, size, badge, onShare }) {
+//   revealed → photo lands behind the same glass; gold markers flash; badge appears
+export default function Centerpiece({ phase, recipe, size, badge }) {
   const spinnerRot = useRef(new Animated.Value(0)).current;
   const wheelOpacity = useRef(new Animated.Value(1)).current;
   const reelOpacity = useRef(new Animated.Value(0)).current;
@@ -312,9 +311,12 @@ export default function Centerpiece({ phase, recipe, size, badge, onShare }) {
             end={{ x: 0.5, y: 1 }}
             style={cp.scrim}
           />
-          <Text style={cp.cardTitle} numberOfLines={2}>
-            {recipe?.name}
-          </Text>
+          <View style={cp.cardFooter}>
+            <Text style={cp.cardHint}>Tap for the recipe  ›</Text>
+            <Text style={cp.cardTitle} numberOfLines={2}>
+              {recipe?.name}
+            </Text>
+          </View>
         </Animated.View>
 
         {/* Teal housing — lit glass instead of two flat bars:
@@ -367,30 +369,15 @@ export default function Centerpiece({ phase, recipe, size, badge, onShare }) {
           ]}
         />
 
-        {/* Reading badge + share — live on the card itself, only when revealed */}
-        {phase === "revealed" && (
-          <>
-            {badge ? (
-              <Animated.View
-                style={[cp.badge, { opacity: cardOpacity }]}
-                pointerEvents="none"
-              >
-                <Text style={cp.badgeText}>{badge}</Text>
-              </Animated.View>
-            ) : null}
-
-            <Animated.View style={[cp.shareWrap, { opacity: cardOpacity }]}>
-              <TouchableOpacity
-                onPress={onShare}
-                style={cp.shareBtn}
-                activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Icon source="share-variant" size={17} color="#fff" />
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
+        {/* Reading badge — lives on the card itself, only when revealed */}
+        {phase === "revealed" && badge ? (
+          <Animated.View
+            style={[cp.badge, { opacity: cardOpacity }]}
+            pointerEvents="none"
+          >
+            <Text style={cp.badgeText}>{badge}</Text>
+          </Animated.View>
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -424,11 +411,21 @@ const cp = StyleSheet.create({
   symbol: { fontSize: 96, lineHeight: 104 },
 
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
-  cardTitle: {
+  cardFooter: {
     position: "absolute",
     left: 16,
     right: 16,
     bottom: 16,
+  },
+  cardHint: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 11,
+    letterSpacing: 0.4,
+    color: "#fff",
+    opacity: 0.7,
+    marginBottom: 3,
+  },
+  cardTitle: {
     fontFamily: "RalewayBold",
     fontSize: 22,
     lineHeight: 27,
@@ -499,15 +496,5 @@ const cp = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
     color: "#fff",
-  },
-
-  shareWrap: { position: "absolute", top: 10, right: 10 },
-  shareBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: tealAlpha(0.55),
-    alignItems: "center",
-    justifyContent: "center",
   },
 });
