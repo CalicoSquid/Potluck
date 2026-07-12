@@ -54,6 +54,7 @@ export default {
       "expo-font",
       "expo-updates",
       "./plugins/withAdiRegistration",
+      "./plugins/withLockedDisplayConfig",
       [
         "expo-splash-screen",
         {
