@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "react-native-paper";
 import * as Haptics from "expo-haptics";
 import { captureRef } from "react-native-view-shot";
-import * as Sharing from "expo-sharing";
+import RNShare from "react-native-share";
 
 import { colors, tealAlpha } from "../constants/colors";
 import { commitTodaysPick } from "../lib/readings";
@@ -115,26 +115,41 @@ export default function DoneScreen({ navigation, route }) {
     Share.share({ message: shareLine(recipe.name, url) }).catch(() => {});
   };
 
-  // Snapshot the off-screen ShareCard to an image and open the share sheet.
+  // Snapshot the off-screen ShareCard to an image and open the share sheet
+  // with the poster and a tappable caption + link riding along together.
   const runCardShare = async () => {
     setSharing(true);
+    let uri;
     try {
       await new Promise((r) => setTimeout(r, 60)); // let the card paint a frame
-      const uri = await captureRef(cardRef, {
+      uri = await captureRef(cardRef, {
         format: "png",
         quality: 1,
         result: "tmpfile",
       });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: "image/png",
-          dialogTitle: "Share your verdict",
-        });
-      } else {
-        fallbackTextShare();
-      }
     } catch {
+      // Capture failed — no poster to share, drop to the text+link fallback.
       fallbackTextShare();
+      setSharing(false);
+      return;
+    }
+
+    const url = `${RECIPE_URL_BASE}${recipe.id}`;
+    try {
+      await RNShare.open({
+        url: uri,
+        type: "image/png",
+        message: shareLine(recipe.name, url),
+        dialogTitle: "Share your verdict",
+        failOnCancel: false,
+      });
+    } catch (err) {
+      // failOnCancel:false should swallow user dismissals, but some platforms
+      // still reject — only fall back on a genuine failure, not a cancel.
+      const msg = String(err?.message || "").toLowerCase();
+      const userCancelled =
+        msg.includes("cancel") || msg.includes("did not share");
+      if (!userCancelled) fallbackTextShare();
     } finally {
       setSharing(false);
     }
