@@ -11,12 +11,17 @@ const { withMainActivity } = require("@expo/config-plugins");
 // Android can render as hollow/outline glyphs instead of a solid fill.
 // allowFontScaling:false (see src/lib/fontScaling.js) already handles the
 // separate "Font size" slider — this plugin covers the other two.
-const IMPORTS = `
-import android.content.Context
-import android.content.res.Configuration
-import android.util.DisplayMetrics
-import android.os.Build
-`.trim();
+
+// Injected one-by-one so we can skip any the Expo/RN template already declares.
+// The template imports android.os.Build (for invokeDefaultOnBackPressed), and
+// injecting a second `import android.os.Build` makes Kotlin flag it as an
+// ambiguous import — which fails the build.
+const IMPORTS = [
+  "import android.content.Context",
+  "import android.content.res.Configuration",
+  "import android.util.DisplayMetrics",
+  "import android.os.Build",
+];
 
 const METHOD = `
   override fun attachBaseContext(base: Context) {
@@ -33,6 +38,13 @@ const METHOD = `
   }
 `;
 
+// True if `contents` already has this exact import line (anchored to line start,
+// so "import android.os.Build" won't false-match "…BuildCompat" etc.).
+const hasImport = (contents, imp) => {
+  const escaped = imp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\s*${escaped}\\b`, "m").test(contents);
+};
+
 const withLockedDisplayConfig = (config) => {
   return withMainActivity(config, (config) => {
     if (config.modResults.language !== "kt") {
@@ -46,11 +58,14 @@ const withLockedDisplayConfig = (config) => {
       return config; // already patched
     }
 
-    // Add imports, right after the package line.
-    contents = contents.replace(
-      /^package [^\n]+\n/,
-      (match) => `${match}${IMPORTS}\n`
-    );
+    // Add only the imports the template doesn't already declare.
+    const missing = IMPORTS.filter((imp) => !hasImport(contents, imp));
+    if (missing.length) {
+      contents = contents.replace(
+        /^package [^\n]+\n/,
+        (match) => `${match}\n${missing.join("\n")}\n`
+      );
+    }
 
     // Insert the override as the first member of the class body.
     contents = contents.replace(
