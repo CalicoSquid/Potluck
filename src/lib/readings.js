@@ -1,8 +1,8 @@
-// ── Daily readings store ──────────────────────────────────────────────────────
-// Potluck keeps one canonical "reading" per day — the universe's verdict.
-// The first spin of a day sets it; only a committed pick ("Making this")
-// overrides it. Entries fade after 7 days. Permanence is Savor's job; this
-// is just a receipt that expires.
+// ── Daily pick store ──────────────────────────────────────────────────────────
+// Potluck persists exactly one thing: the dish you *lock in* each day. It pins
+// tonight's dinner (reopen → land back on it) and feeds the fading "This Week"
+// diary. Spins you never commit to aren't stored — fate is a moment, not a
+// record. Entries fade after 7 days; permanence is Savor's job.
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -41,35 +41,41 @@ const prune = (list) => {
 const persist = (list) =>
   AsyncStorage.setItem(KEY, JSON.stringify(list)).catch(() => {});
 
-// Pruned, newest-first. Also rewrites storage so expired entries actually go.
+// The "This Week" diary — a record of what you committed to cook, newest-first.
+// Only committed picks surface: uncommitted fate-spins still live in storage
+// (they power "today's reading" on the wheel) but never clutter the log. A list
+// of dishes you rerolled past and never made is a diary of nothing; this is a
+// diary of keepers — which is the whole reason to send one to Savor.
+// Still prunes + persists the full list so expired entries actually go.
 export const loadReadings = async () => {
   const list = prune(await loadRaw()).sort((a, b) => b.ts - a.ts);
   persist(list);
-  return list;
+  return list.filter((r) => r.committed);
 };
 
+// Today's locked-in pick, or null. Only committed picks are ever stored, so a
+// non-null result here means "you committed to this dish today."
 export const getTodaysReading = async () => {
   const today = dayKey();
   return prune(await loadRaw()).find((r) => r.date === today) || null;
 };
 
-// Upsert today's entry.
-//   • no entry yet         → create it (the canonical reading)
-//   • entry exists, !commit → leave it (rerolls don't disturb the reading)
-//   • commit === true       → overwrite (commitment beats fate)
-export const setTodaysReading = async (recipe, { committed = false } = {}) => {
+// Commit today's pick — the dish you locked in to actually cook. One per day;
+// locking a new one overwrites the last (commitment beats fate, and beats an
+// earlier commitment too). This is the only writer: uncommitted spins never
+// reach storage.
+export const commitTodaysPick = async (recipe) => {
   if (!recipe?.id) return;
   const today = dayKey();
   const list  = prune(await loadRaw());
   const entry = list.find((r) => r.date === today);
 
   if (entry) {
-    if (!committed) return;             // a reroll never overrides the reading
     entry.recipe    = recipe;
     entry.committed = true;
     entry.ts        = Date.now();
   } else {
-    list.push({ date: today, ts: Date.now(), committed, recipe });
+    list.push({ date: today, ts: Date.now(), committed: true, recipe });
   }
   persist(list);
 };

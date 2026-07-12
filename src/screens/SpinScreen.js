@@ -18,7 +18,8 @@ import { useLazyQuery } from "@apollo/client/react";
 import * as Haptics from "expo-haptics";
 
 import { colors, tealAlpha, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
-import { getTodaysReading, setTodaysReading } from "../lib/readings";
+import { getTodaysReading } from "../lib/readings";
+import { hasOnboarded, setOnboarded } from "../lib/onboarding";
 import { totalMins, fmtMins, daypartNow } from "../lib/time";
 import { decodeRecipe } from "../lib/recipe";
 import {
@@ -35,6 +36,7 @@ import PotluckHeader from "../components/PotluckHeader";
 import ComicBackground from "../components/ComicBackground";
 import Centerpiece from "../components/Centerpiece";
 import TypewriterVerdict from "../components/TypewriterVerdict";
+import OnboardingSheet from "../components/OnboardingSheet";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -54,10 +56,10 @@ export default function SpinScreen({ navigation }) {
 
   const [phase, setPhase] = useState("idle"); // idle | spinning | revealed
   const [recipe, setRecipe] = useState(null);
-  const [readingId, setReadingId] = useState(null); // id of today's canonical reading
-  const [hadReadingOnOpen, setHadReadingOnOpen] = useState(false); // drives the header's one-shot pulse
-  const [booting, setBooting] = useState(true); // gates first paint until the reading read resolves
-  const [hasReadingToday, setHasReadingToday] = useState(false);
+  const [committedId, setCommittedId] = useState(null); // id of today's locked-in pick, if we opened into one
+  const [hadPickOnOpen, setHadPickOnOpen] = useState(false); // drives the header's one-shot pulse
+  const [booting, setBooting] = useState(true); // gates first paint until the pick read resolves
+  const [showOnboarding, setShowOnboarding] = useState(false); // first-run intro, shown once
   const [sessionSpins, setSessionSpins] = useState(0);
   const [seenIds, setSeenIds] = useState([]);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -74,14 +76,15 @@ export default function SpinScreen({ navigation }) {
     let cancelled = false;
     getTodaysReading()
       .then((entry) => {
-        if (cancelled || !entry?.recipe?.id) return;
+        // Only a *committed* pick resurfaces — reopen straight onto tonight's
+        // locked-in dish. An uncommitted spin was never stored, so a fresh
+        // session gets a fresh wheel. Fate is a moment; commitment is what lasts.
+        if (cancelled || !entry?.committed || !entry?.recipe?.id) return;
         const r = entry.recipe;
-        // Open straight into today's reading instead of a blank wheel.
         setRecipe(r);
         setSeenIds([r.id]);
-        setReadingId(r.id);
-        setHasReadingToday(true);
-        setHadReadingOnOpen(true);
+        setCommittedId(r.id);
+        setHadPickOnOpen(true);
         setRevealSub(verdictFor(r));
         setPhase("revealed");
       })
@@ -92,6 +95,25 @@ export default function SpinScreen({ navigation }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // First open ever → the universe introduces itself, once. Checked separately
+  // from the reading read so a storage hiccup on one never blocks the other.
+  useEffect(() => {
+    let cancelled = false;
+    hasOnboarded()
+      .then((done) => {
+        if (!cancelled && !done) setShowOnboarding(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissOnboarding = useCallback(() => {
+    setShowOnboarding(false);
+    setOnboarded();
   }, []);
 
   const [fetchRecipe, { loading }] = useLazyQuery(RANDOM_RECIPE, {
@@ -149,18 +171,11 @@ export default function SpinScreen({ navigation }) {
         setSeenIds((prev) => [...prev, picked.id]);
         setRevealSub(verdictFor(picked));
         setPhase("revealed");
-
-        // First spin of the day becomes the canonical reading. Later rerolls
-        // reveal normally but never claim the badge or disturb the stored pick
-        // (setTodaysReading no-ops on an existing, uncommitted entry).
-        if (!hasReadingToday) {
-          setHasReadingToday(true);
-          setReadingId(picked.id);
-        }
-        setTodaysReading(picked, { committed: false });
+        // A spin is ephemeral — nothing is stored until you lock it in on the
+        // recipe screen. A fresh spin never carries the "locked in" badge.
       })
       .catch(() => recover("Something went wrong. Give it another spin."));
-  }, [phase, loading, seenIds, recipe, hasReadingToday]);
+  }, [phase, loading, seenIds, recipe]);
 
   const handleSeeRecipe = useCallback(() => {
     if (recipe) navigation.navigate("Recipe", { recipe });
@@ -198,7 +213,7 @@ export default function SpinScreen({ navigation }) {
 
       <PotluckHeader
         spinning={isSpinning}
-        hasReading={hadReadingOnOpen}
+        hasReading={hadPickOnOpen}
         onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
       />
 
@@ -226,8 +241,8 @@ export default function SpinScreen({ navigation }) {
                 recipe={recipe}
                 size={CENTER_SIZE}
                 badge={
-                  isRevealed && recipe?.id === readingId
-                    ? "TODAY'S READING"
+                  isRevealed && recipe?.id === committedId
+                    ? "LOCKED IN"
                     : null
                 }
                 onShare={handleShare}
@@ -325,6 +340,13 @@ export default function SpinScreen({ navigation }) {
           )}
         </View>
       </View>
+
+      {!booting && (
+        <OnboardingSheet
+          visible={showOnboarding}
+          onClose={dismissOnboarding}
+        />
+      )}
     </View>
   );
 }

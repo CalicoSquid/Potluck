@@ -17,7 +17,8 @@ import he from "he";
 import * as Haptics from "expo-haptics";
 
 import { colors, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
-import { getTodaysReading, setTodaysReading } from "../lib/readings";
+import { getTodaysReading, commitTodaysPick } from "../lib/readings";
+import { pick } from "../lib/spinCopy";
 import PotluckButton from "../components/PotluckButton";
 import PotluckCard from "../components/PotluckCard";
 import PotluckHeader from "../components/PotluckHeader";
@@ -28,6 +29,20 @@ import ShopTab from "../components/ShopTab";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+// Shown on "Lock it in" only when a *different* dish is already locked in today,
+// so the swap is legible without a modal. Dry, fate-aware, mildly put-out — the
+// universe permitting itself to be overruled.
+const REPLACE_LINES = [
+  (n) => `Bumps ${n} for today.`,
+  (n) => `Overrules ${n}. Bold.`,
+  (n) => `Replaces ${n} — fate sighs.`,
+  (n) => `Knocks ${n} off the top.`,
+];
+
+// Keep the interpolated name short so the subtitle stays a tidy line.
+const shortName = (s, n = 18) =>
+  s && s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
+
 export default function RecipeScreen({ navigation, route }) {
   const { recipe } = route.params;
   const [activeTab, setActiveTab] = useState("Recipe");
@@ -37,13 +52,21 @@ export default function RecipeScreen({ navigation, route }) {
   const stickyHeight = 94 + 94 + 30 + 12 + (insets.bottom || 12);
 
   const [locked, setLocked] = useState(false);
+  const [replaceLine, setReplaceLine] = useState(null); // set when a *different* dish is already locked in today
 
-  // If this dish is already today's committed pick, reflect that on re-entry.
+  // On entry, reconcile against today's committed pick (if any):
+  //   • same dish     → already locked in, reflect that
+  //   • different dish → locking this one bumps it; say so, in voice
+  //   • nothing / just a fate-spin → normal "your one save" copy
   useEffect(() => {
     getTodaysReading()
       .then((entry) => {
-        if (entry?.committed && entry?.recipe?.id === recipe.id)
+        if (!entry?.committed) return;
+        if (entry.recipe?.id === recipe.id) {
           setLocked(true);
+        } else if (entry.recipe?.name) {
+          setReplaceLine(pick(REPLACE_LINES)(shortName(he.decode(entry.recipe.name))));
+        }
       })
       .catch(() => {});
   }, []);
@@ -52,7 +75,7 @@ export default function RecipeScreen({ navigation, route }) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {},
     );
-    setTodaysReading(recipe, { committed: true }); // the one-a-day save
+    commitTodaysPick(recipe); // the one-a-day save — this is tonight's dinner
     setLocked(true);
     navigation.navigate("Done", { recipe });
   };
@@ -181,7 +204,9 @@ export default function RecipeScreen({ navigation, route }) {
           icon={locked ? "lock-check" : "lock-outline"}
           title={locked ? "Locked in for today" : "Lock it in"}
           subtitle={
-            locked ? "Today's pick — tap to go cook" : "Your one save for today"
+            locked
+              ? "Today's pick — tap to go cook"
+              : replaceLine || "Your one save for today"
           }
           gradientColors={TEAL_GRADIENT}
           shadowColor={TEAL_SHADOW}
