@@ -43,7 +43,7 @@ import ComicBackground from "../components/ComicBackground";
 import Centerpiece from "../components/Centerpiece";
 import TypewriterVerdict from "../components/TypewriterVerdict";
 import OnboardingSheet from "../components/OnboardingSheet";
-import UniverseToast from "../components/UniverseToast";
+import BanNotice from "../components/BanNotice";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -71,7 +71,7 @@ export default function SpinScreen({ navigation }) {
   const [headerHeight, setHeaderHeight] = useState(0);
   const [revealSub, setRevealSub] = useState(() => pick(REVEAL_SUBLINES));
   const [bannedIds, setBannedIds] = useState([]); // recipe ids sent to the void
-  const [toast, setToast] = useState(null); // the universe's 86 reaction
+  const [toast, setToast] = useState(null); // temporary in-place 86 reaction
   const [copy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
     idleSubline: pick(IDLE_SUBLINES),
@@ -79,6 +79,8 @@ export default function SpinScreen({ navigation }) {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const spinSeq = useRef(0); // invalidates in-flight spins superseded by a newer action
+  const toastSeq = useRef(0);
+  const pendingBanOps = useRef(new Map()); // closes the tiny ban/undo persistence race
 
   useEffect(() => {
     let cancelled = false;
@@ -215,30 +217,78 @@ export default function SpinScreen({ navigation }) {
     runSpin();
   }, [runSpin]);
 
-  // 86 the current dish — overruling the universe. Banned locally (so it's gone
-  // from the reel for good), the universe reacts, and we immediately spin a fresh
-  // one that excludes the dish we just cast out.
+  // 86 the current dish — overruling the universe. The UI updates
+  // optimistically so the reaction appears in the same beat as the replacement
+  // spin. Persistence is reconciled in the background.
   const handle86 = useCallback(() => {
     if (!recipe || phase === "spinning" || loading) return;
     const victim = recipe;
+    const toastId = `${Date.now()}-${++toastSeq.current}`;
+    const predictedCount = new Set([...bannedIds, victim.id]).size;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => {},
     );
 
+    pendingBanOps.current.set(victim.id, {
+      toastId,
+      undone: false,
+    });
+
+    setBannedIds((prev) =>
+      prev.includes(victim.id) ? prev : [...prev, victim.id],
+    );
+    setToast({
+      id: toastId,
+      message: banReactionFor(predictedCount),
+      count: predictedCount,
+      victim,
+    });
+
     banRecipe(victim.id)
-      .then((count) => {
-        setBannedIds((prev) =>
-          prev.includes(victim.id) ? prev : [...prev, victim.id],
+      .then((actualCount) => {
+        const op = pendingBanOps.current.get(victim.id);
+        if (!op || op.toastId !== toastId) return;
+
+        // Undo may land while AsyncStorage is still writing the ban. Re-run the
+        // forgiveness after the write settles so the final persisted state wins.
+        if (op.undone) {
+          return unbanRecipe(victim.id)
+            .catch(() => {})
+            .finally(() => pendingBanOps.current.delete(victim.id));
+        }
+
+        pendingBanOps.current.delete(victim.id);
+        setToast((current) =>
+          current?.id === toastId
+            ? {
+                ...current,
+                count: actualCount,
+                message:
+                  actualCount === predictedCount
+                    ? current.message
+                    : banReactionFor(actualCount),
+              }
+            : current,
         );
-        setToast({
-          id: Date.now(),
-          message: banReactionFor(count),
-          count,
-          victim,
-        });
       })
-      .catch(() => {});
+      .catch(() => {
+        const op = pendingBanOps.current.get(victim.id);
+        if (!op || op.toastId !== toastId) return;
+
+        pendingBanOps.current.delete(victim.id);
+        if (op.undone) return;
+
+        setBannedIds((prev) => prev.filter((id) => id !== victim.id));
+        setToast((current) =>
+          current?.id === toastId
+            ? {
+                ...current,
+                message: "The void rejected the paperwork. It may return.",
+              }
+            : current,
+        );
+      });
 
     // If we just 86'd tonight's locked-in dish, un-commit it too.
     if (victim.id === committedId) {
@@ -248,14 +298,17 @@ export default function SpinScreen({ navigation }) {
 
     setRecipe(null); // a failed post-86 spin must fall to idle, not the banished dish
     runSpin({ extraExclude: [victim.id], keepCurrentOnFail: false });
-  }, [recipe, phase, loading, committedId, runSpin]);
+  }, [recipe, phase, loading, committedId, bannedIds, runSpin]);
 
-  // Undo from the toast: forgive the dish and bring it straight back on screen —
-  // the undo you can see. Bumping spinSeq invalidates any spin still in flight.
-  const handleUndo = useCallback(() => {
-    const victim = toast?.victim;
-    if (!victim) return;
+  // Undo from the receipt: forgive the dish and bring it straight back on screen.
+  // The victim is passed directly so this callback stays stable while the screen
+  // rerenders through the replacement spin.
+  const handleUndo = useCallback((victim) => {
+    if (!victim?.id) return;
     spinSeq.current++;
+
+    const pending = pendingBanOps.current.get(victim.id);
+    if (pending) pending.undone = true;
 
     unbanRecipe(victim.id).catch(() => {});
     setBannedIds((prev) => prev.filter((id) => id !== victim.id));
@@ -267,7 +320,11 @@ export default function SpinScreen({ navigation }) {
     );
     setRevealSub(verdictFor(victim));
     setPhase("revealed");
-  }, [toast]);
+  }, []);
+
+  const dismissToast = useCallback((toastId) => {
+    setToast((current) => (current?.id === toastId ? null : current));
+  }, []);
 
   const handleSeeRecipe = useCallback(() => {
     if (recipe) navigation.navigate("Recipe", { recipe });
@@ -331,7 +388,13 @@ export default function SpinScreen({ navigation }) {
           )}
 
           <View style={styles.content}>
-            {booting ? null : isRevealed ? (
+            {toast ? (
+              <BanNotice
+                toast={toast}
+                onUndo={handleUndo}
+                onDismiss={dismissToast}
+              />
+            ) : booting ? null : isRevealed ? (
               <>
                 <TypewriterVerdict text={revealSub} />
                 {(timeStr || yieldStr) && (
@@ -439,12 +502,6 @@ export default function SpinScreen({ navigation }) {
         <OnboardingSheet visible={showOnboarding} onClose={dismissOnboarding} />
       )}
 
-      <UniverseToast
-        toast={toast}
-        onUndo={handleUndo}
-        onDismiss={() => setToast(null)}
-        bottomOffset={Math.max(insets.bottom, 16) + 12}
-      />
     </View>
   );
 }
@@ -469,7 +526,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     marginTop: 22,
-    minHeight: 56,
+    height: 112,
   },
   headline: {
     fontFamily: "RalewayBold",
