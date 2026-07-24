@@ -105,8 +105,9 @@ export default function OnboardingSheet({ visible, onClose }) {
 
               <View style={styles.beats}>
                 <Beat icon="dice-multiple" title="Give it a spin">
-                  Tap the wheel — or the button — and a dish appears. Not feeling
-                  it? Spin again. The universe is patient. Mostly.
+                  Tap the wheel — or the button — and a dish appears. Not
+                  feeling it? Spin again. Never want to see it again? Hit 86 to
+                  remove it from the pool. The universe is patient. Mostly.
                 </Beat>
 
                 <Beat icon="lock-outline" title="Lock in what you'll cook">

@@ -16,9 +16,16 @@ import { Icon } from "react-native-paper";
 import { useLazyQuery } from "@apollo/client/react";
 import * as Haptics from "expo-haptics";
 
-import { colors, tealAlpha, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
-import { getTodaysReading } from "../lib/readings";
+import {
+  colors,
+  tealAlpha,
+  TEAL_GRADIENT,
+  TEAL_SHADOW,
+} from "../constants/colors";
+import { getTodaysReading, clearTodaysPick } from "../lib/readings";
 import { hasOnboarded, setOnboarded } from "../lib/onboarding";
+import { banRecipe, unbanRecipe, getBannedSet } from "../lib/banStore";
+import { banReactionFor, banishedAllLine } from "../lib/banReactions";
 import { totalMins, fmtMins, daypartNow } from "../lib/time";
 import { decodeRecipe } from "../lib/recipe";
 import {
@@ -36,6 +43,7 @@ import ComicBackground from "../components/ComicBackground";
 import Centerpiece from "../components/Centerpiece";
 import TypewriterVerdict from "../components/TypewriterVerdict";
 import OnboardingSheet from "../components/OnboardingSheet";
+import UniverseToast from "../components/UniverseToast";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -62,21 +70,34 @@ export default function SpinScreen({ navigation }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [revealSub, setRevealSub] = useState(() => pick(REVEAL_SUBLINES));
+  const [bannedIds, setBannedIds] = useState([]); // recipe ids sent to the void
+  const [toast, setToast] = useState(null); // the universe's 86 reaction
   const [copy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
     idleSubline: pick(IDLE_SUBLINES),
   }));
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const spinSeq = useRef(0); // invalidates in-flight spins superseded by a newer action
 
   useEffect(() => {
     let cancelled = false;
-    getTodaysReading()
-      .then((entry) => {
-        // Only a *committed* pick resurfaces — reopen straight onto tonight's
-        // locked-in dish. An uncommitted spin was never stored, so a fresh
-        // session gets a fresh wheel. Fate is a moment; commitment is what lasts.
-        if (cancelled || !entry?.committed || !entry?.recipe?.id) return;
+    (async () => {
+      // Load the void first: a banned committed pick must never resurface, and
+      // the first spin should already exclude everything you've 86'd.
+      const banned = await getBannedSet();
+      if (cancelled) return;
+      setBannedIds([...banned]);
+
+      const entry = await getTodaysReading();
+      if (cancelled) return;
+      // Only a *committed*, un-banned pick resurfaces — reopen straight onto
+      // tonight's locked-in dish. Fate is a moment; commitment is what lasts.
+      if (
+        entry?.committed &&
+        entry?.recipe?.id &&
+        !banned.has(entry.recipe.id)
+      ) {
         const r = entry.recipe;
         setRecipe(r);
         setSeenIds([r.id]);
@@ -84,7 +105,8 @@ export default function SpinScreen({ navigation }) {
         setHadPickOnOpen(true);
         setRevealSub(verdictFor(r));
         setPhase("revealed");
-      })
+      }
+    })()
       .catch(() => {})
       .finally(() => {
         if (!cancelled) setBooting(false);
@@ -117,62 +139,135 @@ export default function SpinScreen({ navigation }) {
     fetchPolicy: "no-cache",
   });
 
+  // The shared spin engine. `extraExclude` lets a 86 drop the just-banned dish in
+  // the same breath it spins a replacement; `keepCurrentOnFail` decides whether a
+  // failed fetch falls back onto the current dish (a reroll) or to idle (a 86,
+  // where the current dish is the one we just cast out).
+  const runSpin = useCallback(
+    ({ extraExclude = [], keepCurrentOnFail = true } = {}) => {
+      if (phase === "spinning" || loading) return;
+
+      const seq = ++spinSeq.current;
+      setErrorMsg(null);
+      setSessionSpins((n) => n + 1);
+      setPhase("spinning");
+
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 0.94,
+          duration: 100,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.back(2)),
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      const excludeIds = [...seenIds, ...bannedIds, ...extraExclude];
+
+      const fetchPromise = fetchRecipe({
+        variables: { excludeIds, daypart: daypartNow() },
+      }).then((res) => {
+        const img = res?.data?.randomRecipe?.image;
+        if (img) Image.prefetch(img).catch(() => {});
+        return res;
+      });
+
+      const minSpin = new Promise((r) => setTimeout(r, SPIN_DURATION));
+
+      const recover = (msg) => {
+        if (seq !== spinSeq.current) return;
+        setPhase(keepCurrentOnFail && recipe ? "revealed" : "idle");
+        setErrorMsg(msg);
+      };
+
+      Promise.all([fetchPromise, minSpin])
+        .then(([{ data, error }]) => {
+          if (seq !== spinSeq.current) return; // superseded (e.g. an Undo landed)
+          if (error)
+            return recover(
+              "Couldn't reach the server. Check your connection and try again.",
+            );
+          const picked = decodeRecipe(data?.randomRecipe);
+          if (!picked)
+            return recover(
+              bannedIds.length || extraExclude.length
+                ? banishedAllLine()
+                : "The universe drew a blank — spin again.",
+            );
+
+          setRecipe(picked);
+          setSeenIds((prev) => [...prev, picked.id]);
+          setRevealSub(verdictFor(picked));
+          setPhase("revealed");
+        })
+        .catch(() => recover("Something went wrong. Give it another spin."));
+    },
+    [phase, loading, seenIds, bannedIds, recipe, scaleAnim, fetchRecipe],
+  );
+
   const handleSpin = useCallback(() => {
-    if (phase === "spinning" || loading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    runSpin();
+  }, [runSpin]);
+
+  // 86 the current dish — overruling the universe. Banned locally (so it's gone
+  // from the reel for good), the universe reacts, and we immediately spin a fresh
+  // one that excludes the dish we just cast out.
+  const handle86 = useCallback(() => {
+    if (!recipe || phase === "spinning" || loading) return;
+    const victim = recipe;
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+      () => {},
+    );
+
+    banRecipe(victim.id)
+      .then((count) => {
+        setBannedIds((prev) =>
+          prev.includes(victim.id) ? prev : [...prev, victim.id],
+        );
+        setToast({
+          id: Date.now(),
+          message: banReactionFor(count),
+          count,
+          victim,
+        });
+      })
+      .catch(() => {});
+
+    // If we just 86'd tonight's locked-in dish, un-commit it too.
+    if (victim.id === committedId) {
+      clearTodaysPick();
+      setCommittedId(null);
+    }
+
+    setRecipe(null); // a failed post-86 spin must fall to idle, not the banished dish
+    runSpin({ extraExclude: [victim.id], keepCurrentOnFail: false });
+  }, [recipe, phase, loading, committedId, runSpin]);
+
+  // Undo from the toast: forgive the dish and bring it straight back on screen —
+  // the undo you can see. Bumping spinSeq invalidates any spin still in flight.
+  const handleUndo = useCallback(() => {
+    const victim = toast?.victim;
+    if (!victim) return;
+    spinSeq.current++;
+
+    unbanRecipe(victim.id).catch(() => {});
+    setBannedIds((prev) => prev.filter((id) => id !== victim.id));
 
     setErrorMsg(null);
-    setSessionSpins((n) => n + 1);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setPhase("spinning");
-
-    Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 0.94,
-        duration: 100,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.back(2)),
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    const fetchPromise = fetchRecipe({
-      variables: { excludeIds: seenIds, daypart: daypartNow() },
-    }).then((res) => {
-      const img = res?.data?.randomRecipe?.image;
-      if (img) Image.prefetch(img).catch(() => {});
-      return res;
-    });
-
-    const minSpin = new Promise((r) => setTimeout(r, SPIN_DURATION));
-
-    const recover = (msg) => {
-      setPhase(recipe ? "revealed" : "idle");
-      setErrorMsg(msg);
-    };
-
-    Promise.all([fetchPromise, minSpin])
-      .then(([{ data, error }]) => {
-        if (error)
-          return recover(
-            "Couldn't reach the server. Check your connection and try again.",
-          );
-        const picked = decodeRecipe(data?.randomRecipe);
-        if (!picked) return recover("The universe drew a blank — spin again.");
-
-        setRecipe(picked);
-        setSeenIds((prev) => [...prev, picked.id]);
-        setRevealSub(verdictFor(picked));
-        setPhase("revealed");
-        // A spin is ephemeral — nothing is stored until you lock it in on the
-        // recipe screen. A fresh spin never carries the "locked in" badge.
-      })
-      .catch(() => recover("Something went wrong. Give it another spin."));
-  }, [phase, loading, seenIds, recipe]);
+    setRecipe(victim);
+    setSeenIds((prev) =>
+      prev.includes(victim.id) ? prev : [...prev, victim.id],
+    );
+    setRevealSub(verdictFor(victim));
+    setPhase("revealed");
+  }, [toast]);
 
   const handleSeeRecipe = useCallback(() => {
     if (recipe) navigation.navigate("Recipe", { recipe });
@@ -229,9 +324,7 @@ export default function SpinScreen({ navigation }) {
                 recipe={recipe}
                 size={CENTER_SIZE}
                 badge={
-                  isRevealed && recipe?.id === committedId
-                    ? "LOCKED IN"
-                    : null
+                  isRevealed && recipe?.id === committedId ? "LOCKED IN" : null
                 }
               />
             </Pressable>
@@ -295,18 +388,30 @@ export default function SpinScreen({ navigation }) {
                 shadowColor={TEAL_SHADOW}
                 onPress={handleSeeRecipe}
               />
-              <TouchableOpacity
-                onPress={handleSpin}
-                style={styles.rerollBtn}
-                activeOpacity={0.7}
-                disabled={isSpinning || loading}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Icon source="refresh" size={18} color={colors.teal} />
-                <Text style={styles.rerollBtnLabel} numberOfLines={2}>
-                  {rerollLabel}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.secondaryRow}>
+                <TouchableOpacity
+                  onPress={handleSpin}
+                  style={styles.rerollBtn}
+                  activeOpacity={0.7}
+                  disabled={isSpinning || loading}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Icon source="refresh" size={18} color={colors.teal} />
+                  <Text style={styles.rerollBtnLabel} numberOfLines={2}>
+                    {rerollLabel}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handle86}
+                  style={styles.banBtn}
+                  activeOpacity={0.7}
+                  disabled={isSpinning || loading}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  accessibilityLabel="86 this recipe — banish it from the wheel"
+                >
+                  <Text style={styles.banBtnLabel}>86</Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <Animated.View
@@ -331,11 +436,15 @@ export default function SpinScreen({ navigation }) {
       </View>
 
       {!booting && (
-        <OnboardingSheet
-          visible={showOnboarding}
-          onClose={dismissOnboarding}
-        />
+        <OnboardingSheet visible={showOnboarding} onClose={dismissOnboarding} />
       )}
+
+      <UniverseToast
+        toast={toast}
+        onUndo={handleUndo}
+        onDismiss={() => setToast(null)}
+        bottomOffset={Math.max(insets.bottom, 16) + 12}
+      />
     </View>
   );
 }
@@ -422,9 +531,14 @@ const styles = StyleSheet.create({
 
   wheelTap: { alignItems: "center", justifyContent: "center" },
 
-  rerollBtn: {
+  secondaryRow: {
+    flexDirection: "row",
+    gap: 10,
     marginTop: 12,
     width: "100%",
+  },
+  rerollBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -442,5 +556,22 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     textAlign: "center",
     flexShrink: 1,
+  },
+  banBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.primary + "40",
+    backgroundColor: colors.primary + "0D",
+  },
+  banBtnLabel: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 14,
+    color: colors.primary,
   },
 });

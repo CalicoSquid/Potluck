@@ -4,31 +4,51 @@ import { Icon } from "react-native-paper";
 
 import PotluckCard from "./PotluckCard";
 import { colors } from "../constants/colors";
-import { parseIngredientName, shouldSkip } from "../lib/ingredients";
+import { expandIngredient } from "../lib/ingredients";
+
+const label = (item, showAmounts) =>
+  showAmounts && item.qty ? `${item.qty} ${item.name}` : item.name;
 
 const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
-  const shopItems = React.useMemo(
+  const [showAmounts, setShowAmounts] = useState(false);
+  const [checked, setChecked]         = useState({});
+
+  // Parse once; keep a stable `key` (original index) so checkbox state survives
+  // the amounts toggle even when the displayed list changes length.
+  // One raw line can expand into several rows (e.g. "1 tsp each cumin and garlic").
+  const allItems = React.useMemo(
     () =>
-      (ingredients || [])
-        .map((raw, originalIndex) => ({ raw, name: parseIngredientName(raw), originalIndex }))
-        .filter(({ raw }) => !shouldSkip(raw)),
+      (ingredients || []).flatMap((raw, idx) =>
+        expandIngredient(raw).map((it, j) => ({ key: `${idx}:${j}`, ...it })),
+      ),
     [ingredients],
   );
 
-  const [checked, setChecked] = useState({});
+  // Displayed list: de-dupe by name when showing bare names; keep every line
+  // (with its own amount) when amounts are on.
+  const items = React.useMemo(() => {
+    if (showAmounts) return allItems;
+    const seen = new Set();
+    return allItems.filter((it) => {
+      const k = it.name.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [allItems, showAmounts]);
 
-  const toggle = (i) => setChecked((prev) => ({ ...prev, [i]: !prev[i] }));
+  const toggle = (key) => setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const handleShare = () => {
-    const lines  = shopItems.map(({ name }) => `• ${name}`).join("\n");
+    const lines  = items.map((it) => `• ${label(it, showAmounts)}`).join("\n");
     const header = recipeYield
       ? `Shopping list for ${recipeName} (serves ${recipeYield}):`
       : `Shopping list for ${recipeName}:`;
     Share.share({ message: `${header}\n\n${lines}` });
   };
 
-  const checkedCount = Object.values(checked).filter(Boolean).length;
-  const total        = shopItems.length;
+  const checkedCount = items.filter((it) => checked[it.key]).length;
+  const total        = items.length;
 
   return (
     <View style={styles.container}>
@@ -39,10 +59,28 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
             <Text style={styles.yieldText}>Serves {recipeYield}</Text>
           ) : null}
         </View>
-        <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.7}>
-          <Icon source="share-variant" size={16} color={colors.primary} />
-          <Text style={styles.shareLabel}>Share list</Text>
-        </TouchableOpacity>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.pill, showAmounts && styles.pillOn]}
+            onPress={() => setShowAmounts((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <Icon
+              source={showAmounts ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={14}
+              color={showAmounts ? colors.primary : colors.teal}
+            />
+            <Text style={[styles.pillLabel, showAmounts && styles.pillLabelOn]}>
+              Amounts
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.pill} onPress={handleShare} activeOpacity={0.7}>
+            <Icon source="share-variant" size={14} color={colors.primary} />
+            <Text style={[styles.pillLabel, styles.pillLabelOn]}>Share</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {checkedCount > 0 && (
@@ -50,18 +88,18 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
       )}
 
       <PotluckCard style={styles.listCard}>
-        {shopItems.map(({ name }, i) => (
+        {items.map((it, i) => (
           <TouchableOpacity
-            key={i}
-            style={[styles.row, i < shopItems.length - 1 && styles.rowBorder]}
-            onPress={() => toggle(i)}
+            key={it.key}
+            style={[styles.row, i < items.length - 1 && styles.rowBorder]}
+            onPress={() => toggle(it.key)}
             activeOpacity={0.7}
           >
-            <View style={[styles.checkbox, checked[i] && styles.checkboxDone]}>
-              {checked[i] && <Icon source="check" size={14} color="#fff" />}
+            <View style={[styles.checkbox, checked[it.key] && styles.checkboxDone]}>
+              {checked[it.key] && <Icon source="check" size={14} color="#fff" />}
             </View>
-            <Text style={[styles.itemText, checked[i] && styles.itemDone]}>
-              {name}
+            <Text style={[styles.itemText, checked[it.key] && styles.itemDone]}>
+              {label(it, showAmounts)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -75,9 +113,7 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    gap: 12,
-  },
+  container: { gap: 12 },
   headerRow: {
     flexDirection:  "row",
     justifyContent: "space-between",
@@ -95,22 +131,29 @@ const styles = StyleSheet.create({
     opacity:    0.55,
     marginTop:  2,
   },
-  shareBtn: {
-    flexDirection:   "row",
-    alignItems:      "center",
-    gap:             5,
-    paddingVertical: 2,
+  actions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  pill: {
+    flexDirection:     "row",
+    alignItems:        "center",
+    gap:               5,
+    paddingVertical:   3,
     paddingHorizontal: 10,
-    borderRadius:    20,
-    borderWidth:     1,
+    borderRadius:      20,
+    borderWidth:       1,
+    borderColor:       colors.border,
+    backgroundColor:   "transparent",
+  },
+  pillOn: {
     borderColor:     colors.primary + "40",
     backgroundColor: colors.primary + "0D",
   },
-  shareLabel: {
+  pillLabel: {
     fontFamily: "RalewayBold",
     fontSize:   12,
-    color:      colors.primary,
+    color:      colors.teal,
+    opacity:    0.7,
   },
+  pillLabelOn: { color: colors.primary, opacity: 1 },
   progress: {
     fontFamily: "Raleway",
     fontSize:   12,
