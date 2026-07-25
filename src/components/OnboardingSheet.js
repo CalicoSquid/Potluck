@@ -47,21 +47,38 @@ const Beat = ({ icon, glyph, image, title, children }) => (
 /**
  * OnboardingSheet — the universe introducing itself, once, on first open.
  *
- * Two beats, not one scroll:
- *   1. How it works — spin, lock in, the week's fading log.
+ * Two screens, not one scroll:
+ *   1. How it works — spin, lock in, the week's fading log, and a muttered
+ *      warning about 86 that deliberately explains nothing.
  *   2. Where dinner comes from — the Savor relationship.
  *
  * Split so the Savor message gets its own screen instead of being a beat you
- * scroll past (or, with a pinned CTA, never reach). Each screen is sized to show
- * its own button. The download ask itself lives later, on DoneScreen, once the
- * user's had a win — this is awareness, not a gate.
+ * scroll past (or, with a pinned CTA, never reach). The download ask itself
+ * lives later, on DoneScreen, once the user's had a win — this is awareness,
+ * not a gate.
+ *
+ * Full-bleed rather than a bottom sheet. As a sheet, its height was driven by
+ * its content, so whatever showed above it was leftover rather than chosen — a
+ * ~25pt band of half-cropped ComicBackground that read as a rendering fault, not
+ * a glimpse of the app. A sheet only earns its keep when what's behind it means
+ * something. Going full-bleed also drops the 90% height cap, which is what made
+ * "everything visible without scrolling" a matter of luck on small devices.
+ *
+ * Layout on both screens: content top, CTA pinned bottom, all the slack pooled
+ * into one gap between them. Two evenly-distributed gaps look accidental; one
+ * deliberate one doesn't. The CTA lands in the same place on both screens, so it
+ * doesn't jump when you advance.
+ *
+ * Each screen is still a ScrollView with flexGrow — on a phone small enough that
+ * the copy genuinely won't fit, it scrolls rather than clipping. It shouldn't
+ * ever need to.
  *
  * The two screens swap instantly rather than crossfading: they have different
- * heights (a scroll vs a short column), so a fade would have to paper over a
- * layout reflow — which reads as a flicker. A clean cut doesn't.
+ * shapes, so a fade would have to paper over a layout reflow — which reads as a
+ * flicker. A clean cut doesn't.
  *
- * Deliberately not backdrop-dismissable and swallows Android back: the only way
- * forward is the CTA, so nobody taps past the framing by accident.
+ * Deliberately not dismissable and swallows Android back: the only way forward
+ * is the CTA, so nobody taps past the framing by accident.
  */
 export default function OnboardingSheet({ visible, onClose }) {
   const insets = useSafeAreaInsets();
@@ -72,82 +89,111 @@ export default function OnboardingSheet({ visible, onClose }) {
     if (visible) setStep(0);
   }, [visible]);
 
+  const paneStyle = {
+    paddingTop: (insets.top || 0) + 26,
+    paddingBottom: (insets.bottom || 0) + 18,
+  };
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
       statusBarTranslucent
-      onRequestClose={() => {}} // swallow Android back — the sheet is intentional
+      onRequestClose={() => {}} // swallow Android back — the intro is intentional
     >
-      <View style={styles.backdrop}>
-        <View
-          style={[styles.sheet, { paddingBottom: 24 + (insets.bottom || 0) }]}
-        >
-          <View style={styles.notch} />
-
-          {step === 0 ? (
-            // ── Screen 1 — how it works ──────────────────────────────────
-            // Scrolls only if a small device can't fit all three beats; the
-            // CTA rides at the end. No Savor here, so scrolling to reach it
-            // costs nothing.
-            <ScrollView
-              style={styles.pane}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.paneBody}
-            >
+      <View style={styles.screen}>
+        {step === 0 ? (
+          // ── Screen 1 — how it works ──────────────────────────────────
+          <ScrollView
+            style={styles.pane}
+            contentContainerStyle={[styles.paneContent, paneStyle]}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+          >
+            <View>
               <Text style={styles.eyebrow}>A WORD FROM THE UNIVERSE</Text>
               <Text style={styles.title}>You spin. It decides. You cook.</Text>
               <Text style={styles.intro}>
-                That's the entire app. No feed, no algorithm, nothing to agonise
-                over. Fate's got dinner covered.
+                That&apos;s the entire app. No feed, no algorithm, nothing to
+                agonise over.
               </Text>
 
               <View style={styles.beats}>
                 <Beat icon="dice-multiple" title="Give it a spin">
                   Tap the wheel — or the button — and a dish appears. Not
-                  feeling it? Spin again. Never want to see it again? Hit 86 to
-                  remove it from the pool. The universe is patient. Mostly.
+                  feeling it? Spin again. The universe is patient. Mostly.
                 </Beat>
 
                 <Beat icon="lock-outline" title="Lock in what you'll cook">
-                  Nothing sticks until you lock one in. That's your pick for the
-                  day, and the one that lands in your week.
+                  Nothing sticks until you lock one in. That&apos;s your pick
+                  for the day, and the one that lands in your week.
                 </Beat>
 
                 <Beat glyph title="The three dots, up top">
-                  Your week's locked-in dishes live there, then fade after seven
-                  days. Permanence is Savor's job.
+                  Your week&apos;s locked-in dishes live there, then fade after
+                  seven days.
                 </Beat>
+              </View>
+            </View>
+
+            {/* All the slack pools here, above the closing beat. */}
+            <View style={styles.slack} />
+
+            <View>
+              <View style={styles.aside}>
+                <View style={styles.asidePill}>
+                  <Text style={styles.asidePillText}>86</Text>
+                </View>
+                <Text style={styles.asideText}>
+                  You&apos;ll see this on a dish. Don&apos;t press it. I know you
+                  will. Please don&apos;t.
+                </Text>
               </View>
 
               <PotluckButton
                 icon="arrow-right"
                 title="One more thing…"
-                subtitle="Where dinner actually comes from"
+                subtitle="Where dinner comes from"
                 onPress={() => setStep(1)}
               />
-            </ScrollView>
-          ) : (
-            // ── Screen 2 — where dinner comes from (the Savor beat) ──────
-            <View style={[styles.pane, styles.savorPane]}>
-              <View style={styles.savorMark}>
-                <Image
-                  source={require("../../assets/savor-logo.png")}
-                  style={styles.savorLogo}
-                  resizeMode="contain"
-                />
+            </View>
+          </ScrollView>
+        ) : (
+          // ── Screen 2 — where dinner comes from (the Savor beat) ──────
+          <ScrollView
+            style={styles.pane}
+            contentContainerStyle={[styles.paneContent, paneStyle]}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+          >
+            {/* Centred in whatever's left above the CTA — the poster this
+                screen always wanted to be. */}
+            <View style={styles.savorBlock}>
+              <View style={styles.savorCard}>
+                <View style={styles.savorMark}>
+                  <Image
+                    source={require("../../assets/savor-logo.png")}
+                    style={styles.savorLogo}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                <Text style={styles.eyebrowCenter}>POWERED BY SAVOR</Text>
+                <Text style={styles.savorTitle}>Every dish is from Savor.</Text>
+                <Text style={styles.savorBody}>
+                  Potluck is a small thing made by the people behind{" "}
+                  <Text style={styles.savorStrong}>Savor</Text> — a proper
+                  recipe app for people who&apos;d rather cook than scroll. Find
+                  a keeper tonight? Send it to Savor and it&apos;s yours for
+                  good.
+                </Text>
               </View>
+            </View>
 
-              <Text style={styles.eyebrowCenter}>POWERED BY SAVOR</Text>
-              <Text style={styles.savorTitle}>Every dish is from Savor.</Text>
-              <Text style={styles.savorBody}>
-                Potluck is a small thing made by the people behind{" "}
-                <Text style={styles.savorStrong}>Savor</Text> — a proper recipe
-                app for people who'd rather cook than scroll. Find a keeper
-                tonight? Send it to Savor and it's yours for good.
-              </Text>
-
+            <View>
               <PotluckButton
                 icon="dice-multiple"
                 title="Let fate decide"
@@ -164,40 +210,22 @@ export default function OnboardingSheet({ visible, onClose }) {
                 <Text style={styles.backLinkText}>‹ Back to how it works</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
+          </ScrollView>
+        )}
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(20,40,41,0.55)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 28,
-    paddingTop: 18,
-    maxHeight: "90%",
-  },
-  notch: {
-    alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.orange + "60",
-    marginBottom: 16,
-  },
+  screen: { flex: 1, backgroundColor: "#fff" },
 
-  // flexShrink lets a pane give up height when the sheet hits its 90% cap, so
-  // the notch stays put and a tall screen-1 scrolls internally.
-  pane: { flexShrink: 1 },
-  paneBody: { paddingBottom: 4 },
+  pane: { flex: 1 },
+  // flexGrow lets the CTA sit on the bottom edge on a normal phone while still
+  // allowing a scroll on one too short to hold the copy.
+  paneContent: { flexGrow: 1, paddingHorizontal: 28 },
+  // minHeight keeps a real gap above the aside even when the screen is tight.
+  slack: { flex: 1, minHeight: 26 },
 
   eyebrow: {
     fontFamily: "RalewayBold",
@@ -219,10 +247,12 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.teal,
     opacity: 0.7,
-    marginBottom: 18,
+    marginBottom: 26,
   },
 
-  beats: { gap: 15, marginBottom: 18 },
+  // Gaps opened from 15 — the room the full-bleed layout bought is better spent
+  // letting the beats breathe than pooled into one enormous void.
+  beats: { gap: 20 },
   beat: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
   beatIcon: {
     width: 40,
@@ -249,12 +279,83 @@ const styles = StyleSheet.create({
     opacity: 0.68,
   },
 
+  // The universe's muttered PS about 86. Deliberately NOT a beat — a beat would
+  // frame it as a feature to go and use, and the whole joke is that it refuses
+  // to explain itself. FIRST_BANISH does the actual teaching, at the moment it
+  // lands. The pill apes the real 86 control on the spin screen so it reads as
+  // that button on sight — the same trick SignatureGlyph plays with the dots.
+  //
+  // Void colourway, matching the banish card and The Void well: the one dark
+  // thing on a white screen, so the register shift does the work the copy
+  // refuses to — and when they finally press 86, the dark card that answers
+  // them is already familiar.
+  aside: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    borderRadius: 16,
+    backgroundColor: colors.tealDark,
+    borderWidth: 1,
+    borderColor: colors.tealLight,
+  },
+  // Orange on tealDark — the same pairing as the 86 stamp on the reel. Alphas
+  // are lifted from the spin screen's values, which were tuned against white
+  // and go invisible on a dark ground.
+  asidePill: {
+    flexShrink: 0,
+    paddingHorizontal: 11,
+    paddingVertical: 11,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: colors.primary + "66",
+    backgroundColor: colors.primary + "1A",
+  },
+  asidePillText: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 13,
+    color: colors.primary,
+  },
+  asideText: {
+    flex: 1,
+    fontFamily: "RalewaySemiBold",
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: colors.offWhite,
+    opacity: 0.78,
+  },
+
   // Header-signature echo for the "three dots" beat.
   sigGlyph: { flexDirection: "row", alignItems: "center", gap: 3.5 },
   sigDot: { width: 6, height: 6, borderRadius: 3 },
 
   // ── Screen 2 — Savor ────────────────────────────────────────────────
-  savorPane: { alignItems: "center", paddingTop: 8 },
+  savorBlock: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 16,
+  },
+  // Screen 1's aside and this card are the same shape at opposite temperatures:
+  // one is the void, one is Savor. Full-bleed left this content floating in a
+  // lot of white — the card gives it an edge to sit against.
+  savorCard: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    backgroundColor: colors.offWhite,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.teal,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
+  },
   savorMark: {
     width: 68,
     height: 68,
@@ -262,7 +363,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary + "10",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 18,
+    marginBottom: 20,
   },
   savorLogo: { width: 40, height: 40 },
   eyebrowCenter: {
@@ -288,12 +389,11 @@ const styles = StyleSheet.create({
     color: colors.teal,
     opacity: 0.7,
     textAlign: "center",
-    marginBottom: 24,
     paddingHorizontal: 4,
   },
   savorStrong: { fontFamily: "RalewayBold", opacity: 1 },
 
-  backLink: { marginTop: 14, paddingVertical: 4 },
+  backLink: { marginTop: 10, paddingVertical: 4, alignSelf: "center" },
   backLinkText: {
     fontFamily: "RalewaySemiBold",
     fontSize: 13,

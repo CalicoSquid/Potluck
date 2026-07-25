@@ -76,14 +76,13 @@ export const commitTodaysPick = async (recipe) => {
   } else {
     list.push({ date: today, ts: Date.now(), committed: true, recipe });
   }
-  persist(list);
+  await persist(list);
 };
 
-// Un-commit today's pick — used when you 86 the very dish you'd locked in, so it
-// doesn't resurface on reopen. Fate erased; nothing takes its place until you
-// commit again.
+// Un-commit today's pick. Kept for explicit reset flows; 86 can no longer
+// target a locked-in dish.
 export const clearTodaysPick = async () => {
   const today = dayKey();
   const list  = prune(await loadRaw()).filter((r) => r.date !== today);
-  persist(list);
+  await persist(list);
 };

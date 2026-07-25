@@ -19,6 +19,7 @@ import AboutSheet from "./AboutSheet";
  *   spinning   — optional. When true, the home wheel spins.
  *   hasReading — optional. When true, the signature pulses once on open.
  *   onLayout   — optional. Reports header height (for ComicBackground).
+ *   onVoidChange — optional. Receives the current banned ID list after a restore.
  */
 
 const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"]; // orange from palette + two signature accents
@@ -112,7 +113,13 @@ const Signature = ({ spinning, hasReading = false, onPress }) => {
   );
 };
 
-const PotluckHeader = ({ onBack, spinning = false, hasReading = false, onLayout }) => {
+const PotluckHeader = ({
+  onBack,
+  spinning = false,
+  hasReading = false,
+  onLayout,
+  onVoidChange,
+}) => {
   const [aboutVisible, setAboutVisible] = useState(false);
 
   return (
@@ -145,7 +152,11 @@ const PotluckHeader = ({ onBack, spinning = false, hasReading = false, onLayout 
         end={{ x: 1, y: 0 }}
       />
 
-      <AboutSheet visible={aboutVisible} onClose={() => setAboutVisible(false)} />
+      <AboutSheet
+        visible={aboutVisible}
+        onClose={() => setAboutVisible(false)}
+        onVoidChange={onVoidChange}
+      />
     </View>
   );
 };

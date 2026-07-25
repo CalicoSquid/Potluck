@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 
 import { colors, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
 import { getTodaysReading, commitTodaysPick } from "../lib/readings";
+import { unbanRecipe } from "../lib/banStore";
 import { pick } from "../lib/spinCopy";
 import PotluckButton from "../components/PotluckButton";
 import PotluckCard from "../components/PotluckCard";
@@ -71,11 +72,18 @@ export default function RecipeScreen({ navigation, route }) {
       .catch(() => {});
   }, []);
 
-  const handleLock = () => {
+  const handleLock = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {},
     );
-    commitTodaysPick(recipe); // the one-a-day save — this is tonight's dinner
+
+    // A locked-in dish can never remain in The Void. This also repairs any old
+    // inconsistent local state created before locked dishes were protected.
+    await Promise.all([
+      unbanRecipe(recipe.id),
+      commitTodaysPick(recipe),
+    ]).catch(() => {});
+
     setLocked(true);
     navigation.navigate("Done", { recipe });
   };

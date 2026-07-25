@@ -55,7 +55,7 @@ const PotluckButton = ({
   <TouchableOpacity
     onPress={loading || disabled ? null : onPress}
     activeOpacity={loading || disabled ? 1 : 0.78}
-    style={[styles.wrap, { shadowColor }]}
+    style={[styles.wrap, { shadowColor }, disabled && styles.wrapDisabled]}
   >
     <LinearGradient
       colors={gradientColors}
@@ -93,6 +93,9 @@ const styles = StyleSheet.create({
     shadowRadius:   10,
     elevation:      6,
   },
+  // Dead button: sits flat instead of lifted, so it reads as spent rather than
+  // merely unpressed. Colour is left to the caller's gradient.
+  wrapDisabled: { shadowOpacity: 0.1, elevation: 1 },
   gradient: {
     flexDirection:     "row",
     alignItems:        "center",

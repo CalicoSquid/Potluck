@@ -19,6 +19,7 @@ import RNShare from "react-native-share";
 
 import { colors, tealAlpha } from "../constants/colors";
 import { commitTodaysPick } from "../lib/readings";
+import { unbanRecipe } from "../lib/banStore";
 import { fmtTotal } from "../lib/time";
 import { pick } from "../lib/spinCopy";
 import ShareCard from "../components/ShareCard";
@@ -105,7 +106,12 @@ export default function DoneScreen({ navigation, route }) {
   // Reaching Done is the commitment signal — this dish becomes today's pick,
   // overriding whatever the universe first served (or an earlier commitment).
   useEffect(() => {
-    if (recipe?.id) commitTodaysPick(recipe);
+    if (recipe?.id) {
+      Promise.all([
+        unbanRecipe(recipe.id),
+        commitTodaysPick(recipe),
+      ]).catch(() => {});
+    }
     return () => {
       if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
     };

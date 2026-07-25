@@ -32,7 +32,7 @@ const REEL_SYMBOLS = [
 //   idle     → wheel, floating (no housing, no shadow)
 //   spinning → housing lifts in; emoji cycle behind the glass; reel-click haptics
 //   revealed → photo lands behind the same glass; gold markers flash; badge appears
-export default function Centerpiece({ phase, recipe, size, badge }) {
+export default function Centerpiece({ phase, recipe, size, badge, banished }) {
   const spinnerRot = useRef(new Animated.Value(0)).current;
   const wheelOpacity = useRef(new Animated.Value(1)).current;
   const reelOpacity = useRef(new Animated.Value(0)).current;
@@ -41,6 +41,17 @@ export default function Centerpiece({ phase, recipe, size, badge }) {
   const markerOpacity = useRef(new Animated.Value(0)).current;
   const lockScale = useRef(new Animated.Value(1)).current;
   const glow = useRef(new Animated.Value(0)).current;
+   const banishFade = useRef(new Animated.Value(0)).current;
+  const banishShake = useRef(new Animated.Value(0)).current;
+  const wasBanished = useRef(false);
+  // Gold win-lights have no business flashing over a dish that's been struck
+  // out — dim the markers to near-nothing for the length of the banish.
+  const markerLive = useRef(
+    Animated.multiply(
+      markerOpacity,
+      banishFade.interpolate({ inputRange: [0, 1], outputRange: [1, 0.1] }),
+    ),
+  ).current;
 
   const [symbol, setSymbol] = useState("🍳");
   const tickRef = useRef(null);
@@ -224,6 +235,31 @@ export default function Centerpiece({ phase, recipe, size, badge }) {
     return stopCycle;
   }, []);
 
+  useEffect(() => {
+    Animated.timing(banishFade, {
+      toValue: banished ? 1 : 0,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    // A short refusal shake on the false -> true edge only, so a re-render
+    // mid-banish can't shake it twice. The universe recoils once. Lands on the
+    // same beat as the double-haptic in handle86, which is the point: the hands
+    // were feeling something the eyes weren't.
+    const struck = banished && !wasBanished.current;
+    wasBanished.current = banished;
+    if (!struck) return;
+
+    banishShake.setValue(0);
+    Animated.sequence([
+      Animated.timing(banishShake, { toValue: 6,  duration: 45, easing: Easing.out(Easing.quad),   useNativeDriver: true }),
+      Animated.timing(banishShake, { toValue: -5, duration: 50, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(banishShake, { toValue: 3,  duration: 45, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(banishShake, { toValue: 0,  duration: 45, easing: Easing.out(Easing.quad),   useNativeDriver: true }),
+    ]).start();
+  }, [banished, banishFade, banishShake]);
+
   const rotate = spinnerRot.interpolate({
     inputRange: [0, 360],
     outputRange: ["0deg", "360deg"],
@@ -233,7 +269,11 @@ export default function Centerpiece({ phase, recipe, size, badge }) {
     <Animated.View
       style={[
         cp.wrap,
-        { width: size, height: size, transform: [{ scale: lockScale }] },
+        {
+          width: size,
+          height: size,
+          transform: [{ scale: lockScale }, { translateX: banishShake }],
+        },
       ]}
     >
       {/* Drop shadow / lift — follows the housing so the idle wheel floats free */}
@@ -311,9 +351,18 @@ export default function Centerpiece({ phase, recipe, size, badge }) {
             end={{ x: 0.5, y: 1 }}
             style={cp.scrim}
           />
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, cp.banishScrim, { opacity: banishFade }]}
+          >
+            
+          </Animated.View>
           <View style={cp.cardFooter}>
             <Text style={cp.cardHint}>Tap for the recipe  ›</Text>
-            <Text style={cp.cardTitle} numberOfLines={2}>
+            <Text
+              style={[cp.cardTitle, banished && cp.cardTitleStruck]}
+              numberOfLines={2}
+            >
               {recipe?.name}
             </Text>
           </View>
@@ -346,11 +395,11 @@ export default function Centerpiece({ phase, recipe, size, badge }) {
 
         {/* Gold win-row markers */}
         <Animated.View
-          style={[cp.markerLeft, { opacity: markerOpacity }]}
+          style={[cp.markerLeft, { opacity: markerLive }]}
           pointerEvents="none"
         />
         <Animated.View
-          style={[cp.markerRight, { opacity: markerOpacity }]}
+          style={[cp.markerRight, { opacity: markerLive }]}
           pointerEvents="none"
         />
 
@@ -411,6 +460,31 @@ const cp = StyleSheet.create({
   symbol: { fontSize: 96, lineHeight: 104 },
 
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
+  banishScrim: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(13,28,29,0.62)",
+  },
+  banishStamp: {
+    borderWidth: 4,
+    borderColor: colors.primary,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    transform: [{ rotate: "-12deg" }],
+    opacity: 0.95,
+  },
+  banishStampText: {
+    fontFamily: "RalewayBold",
+    fontSize: 46,
+    lineHeight: 54,
+    letterSpacing: -1,
+    color: colors.primary,
+  },
+  cardTitleStruck: {
+    textDecorationLine: "line-through",
+    opacity: 0.65,
+  },
   cardFooter: {
     position: "absolute",
     left: 16,

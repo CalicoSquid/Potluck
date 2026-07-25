@@ -12,6 +12,7 @@ import {
   Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { Icon } from "react-native-paper";
 import { useLazyQuery } from "@apollo/client/react";
 import * as Haptics from "expo-haptics";
@@ -21,11 +22,22 @@ import {
   tealAlpha,
   TEAL_GRADIENT,
   TEAL_SHADOW,
+  VOID_GRADIENT,
+  PRIMARY_GRADIENT,
+  PRIMARY_SHADOW,
 } from "../constants/colors";
-import { getTodaysReading, clearTodaysPick } from "../lib/readings";
+import { getTodaysReading } from "../lib/readings";
 import { hasOnboarded, setOnboarded } from "../lib/onboarding";
-import { banRecipe, unbanRecipe, getBannedSet } from "../lib/banStore";
-import { banReactionFor, banishedAllLine } from "../lib/banReactions";
+import {
+  banRecipe,
+  unbanRecipe,
+  getBannedSet,
+  hasBanishedBefore,
+  markBanishedBefore,
+  getBanTally,
+  setBanTally,
+} from "../lib/banStore";
+import { banReactionFor, banishedAllLine, FIRST_BANISH } from "../lib/banReactions";
 import { totalMins, fmtMins, daypartNow } from "../lib/time";
 import { decodeRecipe } from "../lib/recipe";
 import {
@@ -43,7 +55,6 @@ import ComicBackground from "../components/ComicBackground";
 import Centerpiece from "../components/Centerpiece";
 import TypewriterVerdict from "../components/TypewriterVerdict";
 import OnboardingSheet from "../components/OnboardingSheet";
-import BanNotice from "../components/BanNotice";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -71,7 +82,9 @@ export default function SpinScreen({ navigation }) {
   const [headerHeight, setHeaderHeight] = useState(0);
   const [revealSub, setRevealSub] = useState(() => pick(REVEAL_SUBLINES));
   const [bannedIds, setBannedIds] = useState([]); // recipe ids sent to the void
-  const [toast, setToast] = useState(null); // temporary in-place 86 reaction
+  const [hasBanished, setHasBanished] = useState(false); // picks first-run copy
+  const [banishing, setBanishing] = useState(false); // the 86 moment (dish struck out)
+  const [banishMsg, setBanishMsg] = useState(null); // void-coded line, under the reel
   const [copy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
     idleSubline: pick(IDLE_SUBLINES),
@@ -79,31 +92,60 @@ export default function SpinScreen({ navigation }) {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const spinSeq = useRef(0); // invalidates in-flight spins superseded by a newer action
-  const toastSeq = useRef(0);
-  const pendingBanOps = useRef(new Map()); // closes the tiny ban/undo persistence race
+  const bannedIdsRef = useRef([]);
+  const banTallyRef = useRef(0); // lifetime bans, drives reaction tier + milestones
+
+  // Keep the wheel's exclusion state and The Void in sync. When an ID leaves
+  // the void, also remove it from this session's seen list so restoring really
+  // does make it eligible for the very next spin.
+  const applyBannedIds = useCallback((ids, { releaseSeen = false } = {}) => {
+    const next = [...new Set((ids || []).filter(Boolean))];
+
+    if (releaseSeen) {
+      const nextSet = new Set(next);
+      const restored = bannedIdsRef.current.filter((id) => !nextSet.has(id));
+      if (restored.length) {
+        const restoredSet = new Set(restored);
+        setSeenIds((prev) => prev.filter((id) => !restoredSet.has(id)));
+      }
+    }
+
+    bannedIdsRef.current = next;
+    setBannedIds(next);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Load the void first: a banned committed pick must never resurface, and
-      // the first spin should already exclude everything you've 86'd.
-      const banned = await getBannedSet();
-      if (cancelled) return;
-      setBannedIds([...banned]);
+      const [banned, entry, banishedBefore, tally] = await Promise.all([
+        getBannedSet(),
+        getTodaysReading(),
+        hasBanishedBefore(),
+        getBanTally(),
+      ]);
 
-      const entry = await getTodaysReading();
+      const lockedId =
+        entry?.committed && entry?.recipe?.id ? entry.recipe.id : null;
+
+      // Commitment always wins over an old inconsistent void entry. This can
+      // only be needed for data created before locked dishes became protected.
+      if (lockedId && banned.has(lockedId)) {
+        await unbanRecipe(lockedId);
+        banned.delete(lockedId);
+      }
+
       if (cancelled) return;
-      // Only a *committed*, un-banned pick resurfaces — reopen straight onto
-      // tonight's locked-in dish. Fate is a moment; commitment is what lasts.
-      if (
-        entry?.committed &&
-        entry?.recipe?.id &&
-        !banned.has(entry.recipe.id)
-      ) {
+      applyBannedIds([...banned]);
+      setCommittedId(lockedId);
+      setHasBanished(banishedBefore);
+      banTallyRef.current = tally;
+
+      // Reopen straight onto tonight's committed dish. Fate is a moment;
+      // commitment is what lasts.
+      if (lockedId) {
         const r = entry.recipe;
         setRecipe(r);
         setSeenIds([r.id]);
-        setCommittedId(r.id);
         setHadPickOnOpen(true);
         setRevealSub(verdictFor(r));
         setPhase("revealed");
@@ -113,10 +155,42 @@ export default function SpinScreen({ navigation }) {
       .finally(() => {
         if (!cancelled) setBooting(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyBannedIds]);
+
+  // RecipeScreen can lock a dish while this screen remains mounted underneath
+  // it. Refresh both commitment and void state whenever the wheel regains focus
+  // so the 86 control becomes impossible immediately on return.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      (async () => {
+        const [banned, entry] = await Promise.all([
+          getBannedSet(),
+          getTodaysReading(),
+        ]);
+        const lockedId =
+          entry?.committed && entry?.recipe?.id ? entry.recipe.id : null;
+
+        if (lockedId && banned.has(lockedId)) {
+          await unbanRecipe(lockedId);
+          banned.delete(lockedId);
+        }
+
+        if (!active) return;
+        applyBannedIds([...banned], { releaseSeen: true });
+        setCommittedId(lockedId);
+      })().catch(() => {});
+
+      return () => {
+        active = false;
+      };
+    }, [applyBannedIds]),
+  );
 
   // First open ever → the universe introduces itself, once. Checked separately
   // from the reading read so a storage hiccup on one never blocks the other.
@@ -152,6 +226,8 @@ export default function SpinScreen({ navigation }) {
       const seq = ++spinSeq.current;
       setErrorMsg(null);
       setSessionSpins((n) => n + 1);
+      setBanishing(false);
+      setBanishMsg(null);
       setPhase("spinning");
 
       Animated.sequence([
@@ -212,130 +288,109 @@ export default function SpinScreen({ navigation }) {
     [phase, loading, seenIds, bannedIds, recipe, scaleAnim, fetchRecipe],
   );
 
+  // Spinning out of a banish is the normal way to leave the moment. The dish
+  // still on screen is the one we just cast out, so a failed fetch must land at
+  // idle — restoring it un-struck would hand back a "See the recipe" button for
+  // something that is now banned.
   const handleSpin = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    runSpin();
-  }, [runSpin]);
+    runSpin({ keepCurrentOnFail: !banishing });
+  }, [runSpin, banishing]);
 
-  // 86 the current dish — overruling the universe. The UI updates
-  // optimistically so the reaction appears in the same beat as the replacement
-  // spin. Persistence is reconciled in the background.
+  // 86: a beat, not an ending. No spin, no confirm, no timer — the dish stays on
+  // the reel struck out, an angered haptic fires, and a void-coded card takes the
+  // stage under it. First banish ever gets the "what have I done" line; every one
+  // after gets the cheeky pool. The moment holds until the user spins out of it,
+  // so they decide how long the universe gets to sulk.
   const handle86 = useCallback(() => {
-    if (!recipe || phase === "spinning" || loading) return;
+    if (
+      banishing ||
+      !recipe ||
+      phase !== "revealed" ||
+      loading ||
+      recipe.id === committedId
+    ) {
+      return;
+    }
     const victim = recipe;
-    const toastId = `${Date.now()}-${++toastSeq.current}`;
-    const predictedCount = new Set([...bannedIds, victim.id]).size;
+    const first = !hasBanished;
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+    // Angered: a heavy thump chased by an error buzz.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
       () => {},
     );
 
-    pendingBanOps.current.set(victim.id, {
-      toastId,
-      undone: false,
-    });
-
-    setBannedIds((prev) =>
-      prev.includes(victim.id) ? prev : [...prev, victim.id],
+    // Lifetime, not void size — so restoring a dish and re-banishing it can't
+    // replay a milestone you've already heard.
+    const count = ++banTallyRef.current;
+    setBanTally(count);
+    applyBannedIds(
+      bannedIdsRef.current.includes(victim.id)
+        ? bannedIdsRef.current
+        : [...bannedIdsRef.current, victim.id],
     );
-    setToast({
-      id: toastId,
-      message: banReactionFor(predictedCount),
-      count: predictedCount,
-      victim,
+    banRecipe(victim).catch(() => {
+      applyBannedIds(bannedIdsRef.current.filter((id) => id !== victim.id));
     });
-
-    banRecipe(victim.id)
-      .then((actualCount) => {
-        const op = pendingBanOps.current.get(victim.id);
-        if (!op || op.toastId !== toastId) return;
-
-        // Undo may land while AsyncStorage is still writing the ban. Re-run the
-        // forgiveness after the write settles so the final persisted state wins.
-        if (op.undone) {
-          return unbanRecipe(victim.id)
-            .catch(() => {})
-            .finally(() => pendingBanOps.current.delete(victim.id));
-        }
-
-        pendingBanOps.current.delete(victim.id);
-        setToast((current) =>
-          current?.id === toastId
-            ? {
-                ...current,
-                count: actualCount,
-                message:
-                  actualCount === predictedCount
-                    ? current.message
-                    : banReactionFor(actualCount),
-              }
-            : current,
-        );
-      })
-      .catch(() => {
-        const op = pendingBanOps.current.get(victim.id);
-        if (!op || op.toastId !== toastId) return;
-
-        pendingBanOps.current.delete(victim.id);
-        if (op.undone) return;
-
-        setBannedIds((prev) => prev.filter((id) => id !== victim.id));
-        setToast((current) =>
-          current?.id === toastId
-            ? {
-                ...current,
-                message: "The void rejected the paperwork. It may return.",
-              }
-            : current,
-        );
-      });
-
-    // If we just 86'd tonight's locked-in dish, un-commit it too.
-    if (victim.id === committedId) {
-      clearTodaysPick();
-      setCommittedId(null);
+    if (first) {
+      setHasBanished(true);
+      markBanishedBefore();
     }
 
-    setRecipe(null); // a failed post-86 spin must fall to idle, not the banished dish
-    runSpin({ extraExclude: [victim.id], keepCurrentOnFail: false });
-  }, [recipe, phase, loading, committedId, bannedIds, runSpin]);
+    setBanishMsg(first ? FIRST_BANISH : banReactionFor(count));
+    setBanishing(true); // recipe stays as the struck victim; phase stays "revealed"
+  }, [
+    banishing,
+    recipe,
+    phase,
+    loading,
+    committedId,
+    hasBanished,
+    applyBannedIds,
+  ]);
 
-  // Undo from the receipt: forgive the dish and bring it straight back on screen.
-  // The victim is passed directly so this callback stays stable while the screen
-  // rerenders through the replacement spin.
-  const handleUndo = useCallback((victim) => {
-    if (!victim?.id) return;
-    spinSeq.current++;
+  const handleVoidChange = useCallback(
+    (ids) => {
+      // The Void is a modal inside the header, not a navigation push, so focus
+      // never changes and useFocusEffect never refires. This is the only sync
+      // path — and since the banish moment now persists until the next spin,
+      // the struck dish can be pardoned from in there while it's still on the
+      // reel. If that happens, stop claiming it's gone.
+      const settle = (next) => {
+        applyBannedIds(next, { releaseSeen: true });
+        if (banishing && recipe && !(next || []).includes(recipe.id)) {
+          setBanishing(false);
+          setBanishMsg(null);
+        }
+      };
 
-    const pending = pendingBanOps.current.get(victim.id);
-    if (pending) pending.undone = true;
+      if (Array.isArray(ids)) {
+        settle(ids);
+        return;
+      }
 
-    unbanRecipe(victim.id).catch(() => {});
-    setBannedIds((prev) => prev.filter((id) => id !== victim.id));
-
-    setErrorMsg(null);
-    setRecipe(victim);
-    setSeenIds((prev) =>
-      prev.includes(victim.id) ? prev : [...prev, victim.id],
-    );
-    setRevealSub(verdictFor(victim));
-    setPhase("revealed");
-  }, []);
-
-  const dismissToast = useCallback((toastId) => {
-    setToast((current) => (current?.id === toastId ? null : current));
-  }, []);
+      getBannedSet()
+        .then((set) => settle([...set]))
+        .catch(() => {});
+    },
+    [applyBannedIds, banishing, recipe],
+  );
 
   const handleSeeRecipe = useCallback(() => {
-    if (recipe) navigation.navigate("Recipe", { recipe });
-  }, [recipe, navigation]);
+    if (recipe && !banishing) navigation.navigate("Recipe", { recipe });
+  }, [recipe, banishing, navigation]);
 
   const isSpinning = phase === "spinning";
   const isRevealed = phase === "revealed" && !!recipe;
-  const rerollLabel =
-    REROLL_LABELS[
-      Math.min(Math.max(sessionSpins - 1, 0), REROLL_LABELS.length - 1)
-    ];
+  const isLocked = isRevealed && recipe?.id === committedId;
+  // Mid-banish the reroll copy has to read as an exit, not as another cheeky
+  // aside — whichever line the session index happens to have landed on.
+  const rerollLabel = banishing
+    ? "Spin again"
+    : REROLL_LABELS[
+        Math.min(Math.max(sessionSpins - 1, 0), REROLL_LABELS.length - 1)
+      ];
 
   const mins = isRevealed ? totalMins(recipe) : 0;
   const timeStr = mins ? fmtMins(mins) : null;
@@ -354,6 +409,7 @@ export default function SpinScreen({ navigation }) {
       <PotluckHeader
         spinning={isSpinning}
         hasReading={hadPickOnOpen}
+        onVoidChange={handleVoidChange}
         onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
       />
 
@@ -370,7 +426,7 @@ export default function SpinScreen({ navigation }) {
           {!booting && (
             <Pressable
               onPress={isRevealed ? handleSeeRecipe : handleSpin}
-              disabled={isSpinning || loading}
+              disabled={isSpinning || loading || banishing}
               style={({ pressed }) => [
                 styles.wheelTap,
                 pressed && !isSpinning && { transform: [{ scale: 0.97 }] },
@@ -380,21 +436,27 @@ export default function SpinScreen({ navigation }) {
                 phase={phase}
                 recipe={recipe}
                 size={CENTER_SIZE}
+                banished={banishing}
                 badge={
-                  isRevealed && recipe?.id === committedId ? "LOCKED IN" : null
+                  isRevealed && !banishing && recipe?.id === committedId
+                    ? "LOCKED IN"
+                    : null
                 }
               />
             </Pressable>
           )}
 
           <View style={styles.content}>
-            {toast ? (
-              <BanNotice
-                toast={toast}
-                onUndo={handleUndo}
-                onDismiss={dismissToast}
-              />
-            ) : booting ? null : isRevealed ? (
+            {booting ? null : banishing ? (
+              <View
+                style={styles.banishCard}
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+              >
+                <Text style={styles.banishEyebrow}>BANISHED TO THE VOID</Text>
+                <Text style={styles.banishLine}>{banishMsg}</Text>
+              </View>
+            ) : isRevealed ? (
               <>
                 <TypewriterVerdict text={revealSub} />
                 {(timeStr || yieldStr) && (
@@ -424,7 +486,9 @@ export default function SpinScreen({ navigation }) {
             ) : isSpinning ? (
               <Text style={styles.headline}>The universe is deciding…</Text>
             ) : errorMsg ? (
-              <Text style={styles.errorText} numberOfLines={2}>
+              // "You've 86'd everything" runs long — clipping it to two lines
+              // ate the punchline.
+              <Text style={styles.errorText} numberOfLines={4}>
                 {errorMsg}
               </Text>
             ) : (
@@ -443,13 +507,20 @@ export default function SpinScreen({ navigation }) {
         >
           {booting ? null : isRevealed ? (
             <>
+              {/* Nothing moves during a banish — the primary slot keeps its
+                  place and just goes dark and dead. The joke is the copy. */}
               <PotluckButton
-                icon="silverware-fork-knife"
-                title="See the recipe"
-                subtitle="Ingredients, steps, the lot"
-                gradientColors={TEAL_GRADIENT}
-                shadowColor={TEAL_SHADOW}
+                icon={banishing ? "silverware-clean" : "silverware-fork-knife"}
+                title={banishing ? "Gone." : "See the recipe"}
+                subtitle={
+                  banishing
+                    ? "You did this. There's nothing to read."
+                    : "Ingredients, steps, the lot"
+                }
+                gradientColors={banishing ? VOID_GRADIENT : TEAL_GRADIENT}
+                shadowColor={banishing ? colors.tealDark : TEAL_SHADOW}
                 onPress={handleSeeRecipe}
+                disabled={banishing}
               />
               <View style={styles.secondaryRow}>
                 <TouchableOpacity
@@ -464,16 +535,35 @@ export default function SpinScreen({ navigation }) {
                     {rerollLabel}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handle86}
-                  style={styles.banBtn}
-                  activeOpacity={0.7}
-                  disabled={isSpinning || loading}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  accessibilityLabel="86 this recipe — banish it from the wheel"
-                >
-                  <Text style={styles.banBtnLabel}>86</Text>
-                </TouchableOpacity>
+                {banishing ? (
+                  <View
+                    style={styles.banishedPill}
+                    accessibilityRole="text"
+                    accessibilityLabel="This recipe has been 86'd"
+                  >
+                    <Text style={styles.banishedPillLabel}>86</Text>
+                  </View>
+                ) : isLocked ? (
+                  <View
+                    style={styles.lockedPill}
+                    accessibilityRole="text"
+                    accessibilityLabel="This recipe is locked in and cannot be 86'd"
+                  >
+                    <Icon source="lock" size={15} color={colors.teal} />
+                    <Text style={styles.lockedPillLabel}>Locked</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handle86}
+                    style={styles.banBtn}
+                    activeOpacity={0.7}
+                    disabled={isSpinning || loading}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    accessibilityLabel="86 this recipe — banish it from the wheel"
+                  >
+                    <Text style={styles.banBtnLabel}>86</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </>
           ) : (
@@ -525,8 +615,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
-    marginTop: 22,
-    height: 112,
+    // `hero` is flex:1 and centred, so the whole group (reel + this block)
+    // re-centres whenever this box changes height — the reel used to drift
+    // between idle, revealed and banished. Reserving one height for every state
+    // pins it. marginTop is clawed back to keep the reel near its shipped
+    // position now that the box is taller.
+    marginTop: 14,
+    minHeight: 96,
   },
   headline: {
     fontFamily: "RalewayBold",
@@ -543,6 +638,33 @@ const styles = StyleSheet.create({
     opacity: 0.55,
     textAlign: "center",
     marginTop: 4,
+  },
+
+  // The 86 moment — a slab of the void, matching The Void tab in AboutSheet so
+  // banishing and reviewing a banishment read as the same place.
+  banishCard: {
+    width: "100%",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: colors.tealDark,
+    borderWidth: 3,
+    borderColor: colors.primary,
+  },
+  banishEyebrow: {
+    fontFamily: "RalewayBold",
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: colors.primary,
+    marginBottom: 6,
+  },
+  banishLine: {
+    fontFamily: "RalewayBold",
+    fontSize: 17,
+    lineHeight: 23,
+    color: colors.offWhite,
+    textAlign: "center",
   },
   errorText: {
     fontFamily: "RalewayBold",
@@ -614,6 +736,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
     flexShrink: 1,
   },
+  lockedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 15,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: tealAlpha(0.13),
+    backgroundColor: tealAlpha(0.045),
+  },
+  lockedPillLabel: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 13,
+    color: colors.teal,
+    opacity: 0.7,
+  },
   banBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -623,12 +763,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: colors.primary + "40",
-    backgroundColor: colors.primary + "0D",
+    borderColor: colors.primary,
+    backgroundColor: colors.black
   },
   banBtnLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 14,
     color: colors.primary,
+  },
+  // Spent 86 — identical geometry to banBtn so the row never shifts width.
+  banishedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.primary + "26",
+    backgroundColor: colors.primary + "08",
+  },
+  banishedPillLabel: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 14,
+    color: colors.primary,
+    opacity: 0.5,
+    textDecorationLine: "line-through",
   },
 });

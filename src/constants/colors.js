@@ -33,3 +33,9 @@ export const tealAlpha = (a) => `rgba(20,40,41,${a})`;
 // Teal cabinet gradient + shadow, derived from the family above.
 export const TEAL_GRADIENT = [colors.tealLight, colors.tealDark];
 export const TEAL_SHADOW   = colors.teal;
+export const PRIMARY_GRADIENT = [colors.gradientStart, colors.gradientEnd];
+export const PRIMARY_SHADOW   = colors.gradientStart;
+
+// The void. Shared by the 86 moment on the reel and The Void tab, so banishing
+// and reviewing a banishment speak the same visual language.
+export const VOID_GRADIENT = [colors.tealLight, colors.black];
