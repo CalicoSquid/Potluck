@@ -43,7 +43,7 @@ export default {
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
       // Increment this for every Play Store build submission.
-      versionCode: 4,
+      versionCode: 5,
       // Potluck needs no sensitive permissions — no camera, storage, or contacts.
       // Explicit empty array strips the default RN permission set and keeps
       // the Play Store install prompt clean.
@@ -54,7 +54,6 @@ export default {
       "expo-font",
       "expo-updates",
       "./plugins/withAdiRegistration",
-      "./plugins/withLockedDisplayConfig",
       [
         "expo-splash-screen",
         {
