@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
+  BackHandler,
   Image,
   ScrollView,
   TouchableOpacity,
@@ -79,6 +79,14 @@ const Beat = ({ icon, glyph, image, title, children }) => (
  *
  * Deliberately not dismissable and swallows Android back: the only way forward
  * is the CTA, so nobody taps past the framing by accident.
+ *
+ * An absolutely-positioned overlay inside SpinScreen's root, NOT a <Modal>. A
+ * Modal is a separate native window, and on a device whose display config the
+ * app overrides (see withLockedDisplayConfig) that window can be sized against
+ * a different configuration than the activity — laying the content out wider
+ * and taller than the screen it's drawn on, so the right edge of every line and
+ * the whole closing block fall outside the visible area with no way to scroll
+ * to them. An overlay shares the activity's window and cannot desync from it.
  */
 export default function OnboardingSheet({ visible, onClose }) {
   const insets = useSafeAreaInsets();
@@ -94,128 +102,138 @@ export default function OnboardingSheet({ visible, onClose }) {
     paddingBottom: (insets.bottom || 0) + 18,
   };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={() => {}} // swallow Android back — the intro is intentional
-    >
-      <View style={styles.screen}>
-        {step === 0 ? (
-          // ── Screen 1 — how it works ──────────────────────────────────
-          <ScrollView
-            style={styles.pane}
-            contentContainerStyle={[styles.paneContent, paneStyle]}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-            overScrollMode="never"
-          >
-            <View>
-              <Text style={styles.eyebrow}>A WORD FROM THE UNIVERSE</Text>
-              <Text style={styles.title}>You spin. It decides. You cook.</Text>
-              <Text style={styles.intro}>
-                That&apos;s the entire app. No feed, no algorithm, nothing to
-                agonise over.
-              </Text>
+  // Swallow Android back while the intro is up — the contract Modal's
+  // onRequestClose used to hold.
+  useEffect(() => {
+    if (!visible) return undefined;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => sub.remove();
+  }, [visible]);
 
-              <View style={styles.beats}>
-                <Beat icon="dice-multiple" title="Give it a spin">
-                  Tap the wheel — or the button — and a dish appears. Not
-                  feeling it? Spin again. The universe is patient. Mostly.
-                </Beat>
+  if (!visible) return null;
+
+  return (
+    <View style={styles.screen}>
+      {step === 0 ? (
+        // ── Screen 1 — how it works ──────────────────────────────────
+        <ScrollView
+          style={styles.pane}
+          contentContainerStyle={[styles.paneContent, paneStyle]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
+          <View>
+            <Text style={styles.eyebrow}>A WORD FROM THE UNIVERSE</Text>
+            <Text style={styles.title}>You spin. It decides. You cook.</Text>
+            <Text style={styles.intro}>
+              That&apos;s the entire app. No feed, no algorithm, nothing to
+              agonise over.
+            </Text>
+
+            <View style={styles.beats}>
+              <Beat icon="dice-multiple" title="Give it a spin">
+                Tap the wheel — or the button — and a dish appears. Not
+                feeling it? Spin again. The universe is patient. Mostly.
+              </Beat>
 
               <Beat icon="lock-outline" title="Lock in what you'll cook">
                   Spin as much as you like. Nothing counts until you lock one in
-                  — that&apos;s dinner settled, and the universe off your back.
+                  — that&apos;s dinner settled, and  the universe off your back.
                 </Beat>
 
-                <Beat glyph title="The three dots, up top">
-                  Your week&apos;s locked-in dishes live there, then fade after
-                  seven days.
-                </Beat>
+              <Beat glyph title="The three dots, up top">
+                Your week&apos;s locked-in dishes live there, then fade after
+                seven days.
+              </Beat>
+            </View>
+          </View>
+
+          <View style={styles.paneFoot}>
+            <View style={styles.aside}>
+              <View style={styles.asidePill}>
+                <Text style={styles.asidePillText}>86</Text>
               </View>
+              <Text style={styles.asideText}>
+                You&apos;ll see this on a dish. Don&apos;t press it. I know you
+                will. Please don&apos;t.
+              </Text>
             </View>
 
-            <View style={styles.paneFoot}>
-              <View style={styles.aside}>
-                <View style={styles.asidePill}>
-                  <Text style={styles.asidePillText}>86</Text>
-                </View>
-                <Text style={styles.asideText}>
-                  You&apos;ll see this on a dish. Don&apos;t press it. I know you
-                  will. Please don&apos;t.
-                </Text>
+            <PotluckButton
+              icon="arrow-right"
+              title="One more thing…"
+              subtitle="Where dinner comes from"
+              onPress={() => setStep(1)}
+            />
+          </View>
+        </ScrollView>
+      ) : (
+        // ── Screen 2 — where dinner comes from (the Savor beat) ──────
+        <ScrollView
+          style={styles.pane}
+          contentContainerStyle={[styles.paneContent, paneStyle]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
+          {/* Centred in whatever's left above the CTA — the poster this
+              screen always wanted to be. */}
+          <View style={styles.savorBlock}>
+            <View style={styles.savorCard}>
+              <View style={styles.savorMark}>
+                <Image
+                  source={require("../../assets/savor-logo.png")}
+                  style={styles.savorLogo}
+                  resizeMode="contain"
+                />
               </View>
 
-              <PotluckButton
-                icon="arrow-right"
-                title="One more thing…"
-                subtitle="Where dinner comes from"
-                onPress={() => setStep(1)}
-              />
+              <Text style={styles.eyebrowCenter}>POWERED BY SAVOR</Text>
+              <Text style={styles.savorTitle}>Every dish is from Savor.</Text>
+              <Text style={styles.savorBody}>
+                Potluck is a small thing made by the people behind{" "}
+                <Text style={styles.savorStrong}>Savor</Text> — a proper
+                recipe app for people who&apos;d rather cook than scroll. Find
+                a keeper tonight? Send it to Savor and it&apos;s yours for
+                good.
+              </Text>
             </View>
-          </ScrollView>
-        ) : (
-          // ── Screen 2 — where dinner comes from (the Savor beat) ──────
-          <ScrollView
-            style={styles.pane}
-            contentContainerStyle={[styles.paneContent, paneStyle]}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-            overScrollMode="never"
-          >
-            {/* Centred in whatever's left above the CTA — the poster this
-                screen always wanted to be. */}
-            <View style={styles.savorBlock}>
-              <View style={styles.savorCard}>
-                <View style={styles.savorMark}>
-                  <Image
-                    source={require("../../assets/savor-logo.png")}
-                    style={styles.savorLogo}
-                    resizeMode="contain"
-                  />
-                </View>
+          </View>
 
-                <Text style={styles.eyebrowCenter}>POWERED BY SAVOR</Text>
-                <Text style={styles.savorTitle}>Every dish is from Savor.</Text>
-                <Text style={styles.savorBody}>
-                  Potluck is a small thing made by the people behind{" "}
-                  <Text style={styles.savorStrong}>Savor</Text> — a proper
-                  recipe app for people who&apos;d rather cook than scroll. Find
-                  a keeper tonight? Send it to Savor and it&apos;s yours for
-                  good.
-                </Text>
-              </View>
-            </View>
+          <View style={styles.paneFoot}>
+            <PotluckButton
+              icon="dice-multiple"
+              title="Let fate decide"
+              subtitle="Spin your first dinner"
+              onPress={onClose}
+            />
 
-            <View style={styles.paneFoot}>
-              <PotluckButton
-                icon="dice-multiple"
-                title="Let fate decide"
-                subtitle="Spin your first dinner"
-                onPress={onClose}
-              />
-
-              <TouchableOpacity
-                onPress={() => setStep(0)}
-                style={styles.backLink}
-                activeOpacity={0.6}
-                hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
-              >
-                <Text style={styles.backLinkText}>‹ Back to how it works</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        )}
-      </View>
-    </Modal>
+            <TouchableOpacity
+              onPress={() => setStep(0)}
+              style={styles.backLink}
+              activeOpacity={0.6}
+              hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
+            >
+              <Text style={styles.backLinkText}>‹ Back to how it works</Text>
+            </TouchableOpacity>
+          </View>
+      </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  // absoluteFill over SpinScreen's root, which spans the full window (the
+  // header applies its own top inset, so nothing has offset us yet and
+  // insets.top below is still the right number).
+  screen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#fff",
+    zIndex: 50,
+    elevation: 50,
+  },
 
   pane: { flex: 1 },
   // flexGrow lets the CTA sit on the bottom edge on a normal phone while still
