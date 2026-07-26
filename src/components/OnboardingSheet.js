@@ -126,9 +126,9 @@ export default function OnboardingSheet({ visible, onClose }) {
                   feeling it? Spin again. The universe is patient. Mostly.
                 </Beat>
 
-                <Beat icon="lock-outline" title="Lock in what you'll cook">
-                  Nothing sticks until you lock one in. That&apos;s your pick
-                  for the day, and the one that lands in your week.
+              <Beat icon="lock-outline" title="Lock in what you'll cook">
+                  Spin as much as you like. Nothing counts until you lock one in
+                  — that&apos;s dinner settled, and the universe off your back.
                 </Beat>
 
                 <Beat glyph title="The three dots, up top">
@@ -138,10 +138,7 @@ export default function OnboardingSheet({ visible, onClose }) {
               </View>
             </View>
 
-            {/* All the slack pools here, above the closing beat. */}
-            <View style={styles.slack} />
-
-            <View>
+            <View style={styles.paneFoot}>
               <View style={styles.aside}>
                 <View style={styles.asidePill}>
                   <Text style={styles.asidePillText}>86</Text>
@@ -193,7 +190,7 @@ export default function OnboardingSheet({ visible, onClose }) {
               </View>
             </View>
 
-            <View>
+            <View style={styles.paneFoot}>
               <PotluckButton
                 icon="dice-multiple"
                 title="Let fate decide"
@@ -223,9 +220,23 @@ const styles = StyleSheet.create({
   pane: { flex: 1 },
   // flexGrow lets the CTA sit on the bottom edge on a normal phone while still
   // allowing a scroll on one too short to hold the copy.
-  paneContent: { flexGrow: 1, paddingHorizontal: 28 },
-  // minHeight keeps a real gap above the aside even when the screen is tight.
-  slack: { flex: 1, minHeight: 26 },
+  //
+  // The slack between the content and the CTA is distributed HERE, by
+  // space-between on the container. It used to be a <View style={{flex:1}}/>
+  // spacer child, which silently broke scrolling: `flex: 1` implies
+  // `flexBasis: 0` + `flexShrink: 1`, so the spacer absorbed its size from the
+  // viewport and pinned the content container to exactly one screen. On any
+  // device where the copy didn't fit, the last elements were clipped and the
+  // ScrollView believed there was nothing to scroll to. Never put a flex:1
+  // child inside a scrollable container — let justifyContent do it.
+  paneContent: {
+    flexGrow: 1,
+    justifyContent: "space-between",
+    paddingHorizontal: 28,
+  },
+  // Guarantees a real gap when the screen is tight enough that space-between
+  // has nothing left to give.
+  paneFoot: { marginTop: 26 },
 
   eyebrow: {
     fontFamily: "RalewayBold",
@@ -332,8 +343,12 @@ const styles = StyleSheet.create({
   sigDot: { width: 6, height: 6, borderRadius: 3 },
 
   // ── Screen 2 — Savor ────────────────────────────────────────────────
+  // flexGrow WITHOUT flexShrink/flexBasis:0 — grows into genuine leftover space
+  // to centre the card, but sizes to its content when there isn't any, so it
+  // can't pin the scroll container the way `flex: 1` did.
   savorBlock: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
     paddingBottom: 16,
