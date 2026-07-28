@@ -180,8 +180,8 @@ export const REVEAL_SUBLINES = [
 
 // These work well in sequence, becoming increasingly irritated with each reroll.
 export const REROLL_LABELS = [
-  "Not feeling it? Spin again",
-  "Questioning destiny already?",
+  "Not feeling it?",
+  "Questioning destiny, really?",
   "Fine. Request a recount",
   "The stars will check again",
   "Another timeline, then",
@@ -190,7 +190,7 @@ export const REROLL_LABELS = [
   "Cosmic patience is finite",
   "You are making this weird",
   "The universe remembers",
-  "…you're impossible",
+  "You're impossible",
   "Last chance, mortal",
   "Fine. Spin.",
 ];
@@ -239,7 +239,7 @@ const BRINNER_LINES = [
   "Time is a construct. Make pancakes.",
   "Breakfast has filed for evening access.",
   "Tonight's dinner wears pyjamas.",
-  "Cereal would be cowardice. Cook.",
+  "Cereal is for cowards. Cook.",
   "Brinner approved by cosmic loophole.",
   "Morning food. Night rules.",
   "The universe rejects meal-time orthodoxy.",
