@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Linking,
   Share,
   ActivityIndicator,
   StatusBar,
@@ -22,12 +21,10 @@ import { commitTodaysPick } from "../lib/readings";
 import { unbanRecipe } from "../lib/banStore";
 import { fmtTotal } from "../lib/time";
 import { pick } from "../lib/spinCopy";
+import { saveToSavor, openSavorStore } from "../lib/savor";
 import ShareCard from "../components/ShareCard";
 import PotluckButton from "../components/PotluckButton";
 import PotluckHeader from "../components/PotluckHeader";
-
-const SAVOR_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.calicosquid.savorrecipes";
 
 const RECIPE_URL_BASE = "https://getsavor.recipes/r/";
 
@@ -210,15 +207,7 @@ export default function DoneScreen({ navigation, route }) {
     runCardShare();
   };
 
-  const handleSave = () => {
-    if (!recipe) return;
-    const url = `https://getsavor.recipes/r/${recipe.id}`;
-    Linking.openURL(`savor://create?url=${encodeURIComponent(url)}`).catch(
-      () => {
-        Linking.openURL(SAVOR_STORE_URL).catch(() => {});
-      },
-    );
-  };
+  const handleSave = () => saveToSavor(recipe?.id);
 
   return (
     <View style={styles.root}>

@@ -41,7 +41,7 @@ export default function Centerpiece({ phase, recipe, size, badge, banished }) {
   const markerOpacity = useRef(new Animated.Value(0)).current;
   const lockScale = useRef(new Animated.Value(1)).current;
   const glow = useRef(new Animated.Value(0)).current;
-   const banishFade = useRef(new Animated.Value(0)).current;
+  const banishFade = useRef(new Animated.Value(0)).current;
   const banishShake = useRef(new Animated.Value(0)).current;
   const wasBanished = useRef(false);
   // Gold win-lights have no business flashing over a dish that's been struck
@@ -253,10 +253,30 @@ export default function Centerpiece({ phase, recipe, size, badge, banished }) {
 
     banishShake.setValue(0);
     Animated.sequence([
-      Animated.timing(banishShake, { toValue: 6,  duration: 45, easing: Easing.out(Easing.quad),   useNativeDriver: true }),
-      Animated.timing(banishShake, { toValue: -5, duration: 50, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      Animated.timing(banishShake, { toValue: 3,  duration: 45, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      Animated.timing(banishShake, { toValue: 0,  duration: 45, easing: Easing.out(Easing.quad),   useNativeDriver: true }),
+      Animated.timing(banishShake, {
+        toValue: 6,
+        duration: 45,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(banishShake, {
+        toValue: -5,
+        duration: 50,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(banishShake, {
+        toValue: 3,
+        duration: 45,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(banishShake, {
+        toValue: 0,
+        duration: 45,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [banished, banishFade, banishShake]);
 
@@ -355,10 +375,18 @@ export default function Centerpiece({ phase, recipe, size, badge, banished }) {
             pointerEvents="none"
             style={[StyleSheet.absoluteFill, cp.banishScrim, { opacity: banishFade }]}
           >
-            
+            <View style={cp.banishStamp}>
+              <Text style={cp.banishStampText}>86</Text>
+            </View>
           </Animated.View>
           <View style={cp.cardFooter}>
-            <Text style={cp.cardHint}>Tap for the recipe  ›</Text>
+            {/* The card is unpressable during a banish (SpinScreen disables the
+                Pressable), so the hint would be inviting a tap that does
+                nothing. Space keeps the footer's height stable — dropping the
+                line entirely would shift the title as the strike lands. */}
+            <Text style={cp.cardHint}>
+              {banished ? " " : "Tap for the recipe  ›"}
+            </Text>
             <Text
               style={[cp.cardTitle, banished && cp.cardTitleStruck]}
               numberOfLines={2}

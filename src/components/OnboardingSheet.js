@@ -138,9 +138,9 @@ export default function OnboardingSheet({ visible, onClose }) {
               </Beat>
 
               <Beat icon="lock-outline" title="Lock in what you'll cook">
-                  Spin as much as you like. Nothing counts until you lock one in
-                  — that&apos;s dinner settled, and  the universe off your back.
-                </Beat>
+                Spin as much as you like. Nothing counts until you lock one in —
+                that&apos;s dinner settled, and the universe off your back.
+              </Beat>
 
               <Beat glyph title="The three dots, up top">
                 Your week&apos;s locked-in dishes live there, then fade after
@@ -218,7 +218,7 @@ export default function OnboardingSheet({ visible, onClose }) {
               <Text style={styles.backLinkText}>‹ Back to how it works</Text>
             </TouchableOpacity>
           </View>
-      </ScrollView>
+        </ScrollView>
       )}
     </View>
   );

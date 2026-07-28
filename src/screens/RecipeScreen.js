@@ -16,10 +16,11 @@ import { Icon } from "react-native-paper";
 import he from "he";
 import * as Haptics from "expo-haptics";
 
-import { colors, TEAL_GRADIENT, TEAL_SHADOW } from "../constants/colors";
+import { colors, TEAL_GRADIENT, TEAL_SHADOW, PRIMARY_GRADIENT } from "../constants/colors";
 import { getTodaysReading, commitTodaysPick } from "../lib/readings";
 import { unbanRecipe } from "../lib/banStore";
 import { pick } from "../lib/spinCopy";
+import { saveToSavor } from "../lib/savor";
 import PotluckButton from "../components/PotluckButton";
 import PotluckCard from "../components/PotluckCard";
 import PotluckHeader from "../components/PotluckHeader";
@@ -45,7 +46,12 @@ const shortName = (s, n = 18) =>
   s && s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
 
 export default function RecipeScreen({ navigation, route }) {
-  const { recipe } = route.params;
+  const { recipe, mode } = route.params;
+  // Opened from the week's history (or The Void) rather than from a fresh spin.
+  // These dishes are already past — the user came to keep one, not to overwrite
+  // tonight's dinner with it, so Savor becomes the primary action and locking
+  // in is demoted to a deliberate secondary.
+  const isHistory = mode === "history";
   const [activeTab, setActiveTab] = useState("Recipe");
   const insets = useSafeAreaInsets();
 
@@ -208,20 +214,50 @@ export default function RecipeScreen({ navigation, route }) {
       <View
         style={[styles.stickyBottom, { paddingBottom: insets.bottom || 12 }]}
       >
-        <PotluckButton
-          icon={locked ? "lock-check" : "lock-outline"}
-          title={locked ? "Locked in for today" : "Lock it in"}
-          subtitle={
-            locked
-              ? "Today's pick — tap to go cook"
-              : replaceLine || "Your one save for today"
-          }
-          gradientColors={TEAL_GRADIENT}
-          shadowColor={TEAL_SHADOW}
-          onPress={
-            locked ? () => navigation.navigate("Done", { recipe }) : handleLock
-          }
-        />
+        {isHistory ? (
+          <>
+            <PotluckButton
+              icon="bookmark-plus-outline"
+              title="Save this to Savor"
+              subtitle="Keep it for good"
+              gradientColors={PRIMARY_GRADIENT}
+              shadowColor={TEAL_SHADOW}
+              onPress={() => saveToSavor(recipe.id)}
+            />
+
+            {/* Still possible, just no longer the only way out. */}
+            {!locked && (
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={handleLock}
+                activeOpacity={0.7}
+                hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}
+              >
+                <Icon source="lock-outline" size={15} color={colors.teal} />
+                <Text style={styles.secondaryLabel}>
+                  {replaceLine
+                    ? "Make this today's pick instead"
+                    : "Make this today's pick"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <PotluckButton
+            icon={locked ? "lock-check" : "lock-outline"}
+            title={locked ? "Locked in for today" : "Lock it in"}
+            subtitle={
+              locked
+                ? "Today's pick — tap to go cook"
+                : replaceLine || "Your one save for today"
+            }
+            gradientColors={TEAL_GRADIENT}
+            shadowColor={TEAL_SHADOW}
+            onPress={
+              locked ? () => navigation.navigate("Done", { recipe }) : handleLock
+            }
+          />
+        )}
 
         <TouchableOpacity
           style={styles.spinAgainBtn}
@@ -229,7 +265,9 @@ export default function RecipeScreen({ navigation, route }) {
           activeOpacity={0.6}
           hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
         >
-          <Text style={styles.spinAgainLabel}>← Back to spinning</Text>
+          <Text style={styles.spinAgainLabel}>
+            {isHistory ? "← Back" : "← Back to spinning"}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -354,6 +392,25 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
+  },
+  // History mode's demoted lock action. Quiet enough that Savor stays the
+  // obvious move, present enough that overwriting today is still one tap.
+  secondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 10,
+    paddingVertical: 13,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  secondaryLabel: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 13.5,
+    color: colors.teal,
+    opacity: 0.8,
   },
   spinAgainBtn: { alignItems: "center", paddingVertical: 8, marginTop: 2 },
   spinAgainLabel: {

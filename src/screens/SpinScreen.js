@@ -23,8 +23,6 @@ import {
   TEAL_GRADIENT,
   TEAL_SHADOW,
   VOID_GRADIENT,
-  PRIMARY_GRADIENT,
-  PRIMARY_SHADOW,
 } from "../constants/colors";
 import { getTodaysReading } from "../lib/readings";
 import { hasOnboarded, setOnboarded } from "../lib/onboarding";
@@ -65,6 +63,13 @@ const WORDMARK_HEIGHT = WORDMARK_WIDTH / WORDMARK_ASPECT;
 
 const CENTER_SIZE = SCREEN_WIDTH * 0.64;
 const SPIN_DURATION = 1800;
+
+// The dock's inner height, reserved for every state so the reel above it never
+// moves. Tallest state is the revealed one:
+//   PotluckButton  8 + 16 + 46 + 16 + 8 = 94  (marginVertical + padding + badge)
+//   secondaryRow  12 + 15 + 18 + 15     = 60  (marginTop + padding + label)
+// If the dock ever gains or loses a row, this is the number to change.
+const DOCK_CONTENT_HEIGHT = 154;
 
 // ── Screen ──────────────────────────────────────────────────────────────────--
 export default function SpinScreen({ navigation }) {
@@ -492,19 +497,20 @@ export default function SpinScreen({ navigation }) {
                 {errorMsg}
               </Text>
             ) : (
-              <>
-                <Text style={styles.headline}>{copy.idleHeadline}</Text>
-                <Text style={styles.subline}>{copy.idleSubline}</Text>
-              </>
+              // The subline now lives in the dock, under the Spin button —
+              // close to the thing it's talking about, and it fills the slot
+              // the reserved shelf leaves empty at idle.
+              <Text style={styles.headline}>{copy.idleHeadline}</Text>
             )}
           </View>
         </View>
+        {/* The dock. A fixed shelf the controls live on, flush to the bottom
+            edge — so the hero above it is a constant size and the reel cannot
+            drift when the buttons change. */}
         <View
-          style={[
-            styles.actions,
-            { paddingBottom: Math.max(insets.bottom, 16) },
-          ]}
+          style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 16) }]}
         >
+          <View style={styles.dockInner}>
           {booting ? null : isRevealed ? (
             <>
               {/* Nothing moves during a banish — the primary slot keeps its
@@ -583,8 +589,14 @@ export default function SpinScreen({ navigation }) {
                 onPress={handleSpin}
                 loading={isSpinning}
               />
+              {/* Held while spinning so the shelf doesn't twitch mid-spin —
+                  the wheel is the thing that should be moving, not the copy. */}
+              <Text style={styles.dockSubline} numberOfLines={2}>
+                {isSpinning ? " " : copy.idleSubline}
+              </Text>
             </Animated.View>
           )}
+          </View>
         </View>
       </View>
 
@@ -616,12 +628,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     // `hero` is flex:1 and centred, so the whole group (reel + this block)
-    // re-centres whenever this box changes height — the reel used to drift
-    // between idle, revealed and banished. Reserving one height for every state
-    // pins it. marginTop is clawed back to keep the reel near its shipped
-    // position now that the box is taller.
+    // re-centres whenever this box changes height — the reel drifts between
+    // idle, spinning, revealed and banished, and again mid-reveal as the
+    // verdict wraps and the meta row arrives.
+    //
+    // FIXED height, not minHeight: a floor still lets a tall state grow past it
+    // and shunt the reel. One height for every state is the only thing that
+    // actually pins it. Anything taller than this box overflows it rather than
+    // moving the reel, which is the trade we want.
     marginTop: 14,
-    minHeight: 96,
+    height: 100,
   },
   headline: {
     fontFamily: "RalewayBold",
@@ -629,15 +645,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: colors.teal,
     textAlign: "center",
-  },
-  subline: {
-    fontFamily: "Raleway",
-    fontSize: 14,
-    lineHeight: 18,
-    color: colors.teal,
-    opacity: 0.55,
-    textAlign: "center",
-    marginTop: 4,
   },
 
   // The 86 moment — a slab of the void, matching The Void tab in AboutSheet so
@@ -649,6 +656,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 18,
     backgroundColor: colors.tealDark,
+    // Orange, and thick enough to read as a warning band rather than a hairline
+    // — the void speaking with the 86 control's own colour.
     borderWidth: 3,
     borderColor: colors.primary,
   },
@@ -705,8 +714,61 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
 
-  actions: { width: "100%" },
+  // ── The dock ──────────────────────────────────────────────────────────────
+  // `hero` is flex:1 and this is its sibling, so any height change down here
+  // steals space from the hero and re-centres the reel. The revealed state
+  // carries a second row the idle and spinning states don't — 60pt taller — so
+  // the reel stepped up the moment a dish landed.
+  //
+  // Reserving the height on `dockInner` rather than on the outer box is the
+  // part that matters: RN sizes min/height border-box, so a reservation on the
+  // padded outer element gets eaten by its own paddingBottom, which varies with
+  // the device's inset. The inner box has no padding, so its height is exactly
+  // the height of the controls and nothing else.
+  //
+  // Full-bleed via negative margins against `body`'s 16pt gutter, so the shelf
+  // meets both screen edges while its contents stay on the same grid as the
+  // rest of the screen.
+  //
+  // Deliberately NOT a card: no radius, no shadow, no lift. The rounded, raised
+  // version read as a panel bolted onto the screen — one more surface in an app
+  // whose whole pitch is that there's nothing to navigate. Flat and edge-to-edge,
+  // it's just where the screen ends and the controls begin. The hairline is the
+  // only thing marking it, and it's doing structural work (the comic dots run
+  // right up to it), not decorative.
+  dock: {
+    width: "100%",
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: colors.offWhite,
+    borderTopWidth: 1,
+    borderColor: tealAlpha(0.08),
+  },
+  dockInner: {
+    width: "100%",
+    height: DOCK_CONTENT_HEIGHT,
+    // Centred, not top-aligned. The idle state is one button in a box sized for
+    // two rows, so ~60pt is spare — dumping all of it below the button reads as
+    // a gap, while splitting it above and below reads as a button sitting in a
+    // shelf. In the revealed state the contents fill the box exactly and this
+    // has no effect.
+    justifyContent: "center",
+  },
   ctaWrap: { width: "100%" },
+  // The idle voice, sat under the Spin button in the shelf. Sized so the CTA
+  // plus this line comes to roughly the height of the revealed state's two
+  // rows, which is what stops the shelf feeling half-empty at idle.
+  dockSubline: {
+    fontFamily: "Raleway",
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.teal,
+    opacity: 0.5,
+    textAlign: "center",
+    marginTop: 6,
+    paddingHorizontal: 12,
+  },
 
   wheelTap: { alignItems: "center", justifyContent: "center" },
 
@@ -754,6 +816,9 @@ const styles = StyleSheet.create({
     color: colors.teal,
     opacity: 0.7,
   },
+  // Void colourway: the button that sends a dish to the void is already dressed
+  // as the void. Same dark ground + orange pairing as banishCard, the onboarding
+  // aside and The Void well, so the whole mechanic reads as one place.
   banBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -764,14 +829,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: colors.primary,
-    backgroundColor: colors.black
+    backgroundColor: colors.tealDark,
   },
   banBtnLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 14,
     color: colors.primary,
   },
-  // Spent 86 — identical geometry to banBtn so the row never shifts width.
+  // Spent 86 — identical geometry to banBtn so the row never shifts width, and
+  // the same void colourway held at half strength: the button has been used.
   banishedPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -780,9 +846,10 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 18,
     borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: colors.primary + "26",
-    backgroundColor: colors.primary + "08",
+    borderWidth: 3,
+    borderColor: colors.primary + "59",
+    backgroundColor: colors.tealDark,
+    opacity: 0.9,
   },
   banishedPillLabel: {
     fontFamily: "RalewaySemiBold",

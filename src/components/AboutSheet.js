@@ -24,9 +24,8 @@ import {
   getBanned,
   unbanRecipe,
 } from "../lib/banStore";
+import { openSavorStore } from "../lib/savor";
 
-const SAVOR_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.calicosquid.savorrecipes";
 const PRIVACY_URL = "https://getsavor.recipes/privacy";
 const COFFEE_URL = "https://buymeacoffee.com/calicosquid";
 
@@ -114,7 +113,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange }) => {
   const hasReadings = readings.length > 0;
   const openReading = (recipe) => {
     onClose();
-    navigation.push("Recipe", { recipe });
+    navigation.push("Recipe", { recipe, mode: "history" });
   };
 
   const publishVoid = (nextEntries) => {
@@ -431,7 +430,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange }) => {
                 imageIcon={require("../../assets/savor-logo.png")}
                 title="Get Savor — it's free"
                 subtitle="Your own recipe box. No subscription to start."
-                onPress={() => Linking.openURL(SAVOR_STORE_URL).catch(() => {})}
+                onPress={openSavorStore}
               />
 
               <View style={styles.links}>
