@@ -1,5 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, Image, TouchableOpacity, Animated, Easing } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  Animated,
+  Easing,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "react-native-paper";
@@ -22,7 +29,11 @@ import AboutSheet from "./AboutSheet";
  *   onVoidChange — optional. Receives the current banned ID list after a restore.
  */
 
-const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"]; // orange from palette + two signature accents
+const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"];
+// The void colourway — dark, with a single ember still burning in the middle.
+// Same pairing as the 86 stamp on the reel, so it reads as "something's in
+// there" rather than "something's wrong".
+const VOID_DOT_COLORS = [colors.tealDark, colors.orange, colors.teal];
 
 const WHEEL_SIZE = 38;
 
@@ -30,7 +41,7 @@ const WHEEL_SIZE = 38;
 // turns inside the static ring + leaves. Spins and decelerates on each spin —
 // the logo finally doing what it's shaped to do, in sync with the reel.
 const HeaderWheel = ({ spinning }) => {
-  const rot   = useRef(new Animated.Value(0)).current;
+  const rot = useRef(new Animated.Value(0)).current;
   const turns = useRef(0);
 
   useEffect(() => {
@@ -44,11 +55,21 @@ const HeaderWheel = ({ spinning }) => {
     }).start();
   }, [spinning]);
 
-  const spin = rot.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const spin = rot.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
   const SP = WHEEL_SIZE * 0.72;
 
   return (
-    <View style={{ width: WHEEL_SIZE, height: WHEEL_SIZE, alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{
+        width: WHEEL_SIZE,
+        height: WHEEL_SIZE,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <Animated.Image
         source={require("../../assets/spinner.png")}
         resizeMode="contain"
@@ -70,9 +91,42 @@ const HeaderWheel = ({ spinning }) => {
   );
 };
 
-const Signature = ({ spinning, hasReading = false, onPress }) => {
+const Signature = ({
+  spinning,
+  hasReading = false,
+  voidPending = false,
+  onPress,
+}) => {
   const dots = useRef(DOT_COLORS.map(() => new Animated.Value(0))).current;
   const greetedRef = useRef(false);
+  const palette = voidPending ? VOID_DOT_COLORS : DOT_COLORS;
+
+  // A slow breath on the ember while the void has something new in it. Loops
+  // until acknowledged — unlike the reading pulse, which fires once. This one
+  // is a state, not an event.
+  const ember = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!voidPending) {
+      ember.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ember, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ember, {
+          toValue: 0,
+          duration: 1100,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [voidPending]);
 
   // One calm pulse on open when today already has a reading waiting — a
   // heartbeat, not a notification. Fires once per mount (i.e. per app open).
@@ -83,8 +137,16 @@ const Signature = ({ spinning, hasReading = false, onPress }) => {
     greetedRef.current = true;
     const pulse = (v) =>
       Animated.sequence([
-        Animated.timing(v, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.timing(v, { toValue: 0, duration: 340, useNativeDriver: true }),
+        Animated.timing(v, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(v, {
+          toValue: 0,
+          duration: 340,
+          useNativeDriver: true,
+        }),
       ]);
     Animated.stagger(120, dots.map(pulse)).start();
   }, [hasReading, spinning]);
@@ -94,7 +156,13 @@ const Signature = ({ spinning, hasReading = false, onPress }) => {
       onPress={onPress}
       activeOpacity={0.6}
       hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-      style={styles.signature}
+      style={[styles.signature, voidPending && styles.signatureVoid]}
+      accessibilityLabel={
+        voidPending
+          ? "Menu — something new in the Void"
+          : "Menu — your week and the Void"
+      }
+      accessibilityRole="button"
     >
       {dots.map((v, i) => (
         <Animated.View
@@ -102,9 +170,27 @@ const Signature = ({ spinning, hasReading = false, onPress }) => {
           style={[
             styles.dot,
             {
-              backgroundColor: DOT_COLORS[i],
-              opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
-              transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] }) }],
+              backgroundColor: palette[i],
+              opacity: v.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.9, 1],
+              }),
+              transform: [
+                {
+                  scale: Animated.multiply(
+                    v.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.5],
+                    }),
+                    voidPending && i === 1
+                      ? ember.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.35],
+                        })
+                      : 1,
+                  ),
+                },
+              ],
             },
           ]}
         />
@@ -115,10 +201,12 @@ const Signature = ({ spinning, hasReading = false, onPress }) => {
 
 const PotluckHeader = ({
   onBack,
-  spinning = false,
-  hasReading = false,
+  spinning,
+  hasReading,
   onLayout,
   onVoidChange,
+  voidPending = false,
+  onVoidSeen,
 }) => {
   const [aboutVisible, setAboutVisible] = useState(false);
 
@@ -141,7 +229,15 @@ const PotluckHeader = ({
             )}
           </View>
 
-          <Signature spinning={spinning} hasReading={hasReading} onPress={() => setAboutVisible(true)} />
+           <Signature
+            spinning={spinning}
+            hasReading={hasReading}
+            voidPending={voidPending}
+            onPress={() => {
+              setAboutVisible(true);
+              onVoidSeen?.();   // seen is seen — the flag dies on open, not on close
+            }}
+          />
         </View>
       </SafeAreaView>
 
@@ -171,13 +267,38 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
   },
-  leftSlot: { minWidth: 40, minHeight: 38, alignItems: "flex-start", justifyContent: "center" },
-  backBtn: { width: 32, height: 32, marginLeft: -6, alignItems: "center", justifyContent: "center" },
+  leftSlot: {
+    minWidth: 40,
+    minHeight: 38,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  backBtn: {
+    width: 32,
+    height: 32,
+    marginLeft: -6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-  signature: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 6, paddingLeft: 6 },
+  signature: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.offWhite,
+  },
   dot: { width: 8, height: 8, borderRadius: 4 },
 
   thread: { height: 3, width: "100%" },
+  signatureVoid: {
+    borderColor: colors.orange + "66",
+    backgroundColor: colors.tealDark + "0d",
+  },
 });
 
 export default PotluckHeader;

@@ -9,6 +9,7 @@ import {
   Image,
   TouchableOpacity,
   Pressable,
+  ScrollView,
   Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,7 +36,12 @@ import {
   getBanTally,
   setBanTally,
 } from "../lib/banStore";
-import { banReactionFor, banishedAllLine, FIRST_BANISH } from "../lib/banReactions";
+import {
+  banReactionFor,
+  banishedAllLine,
+  FIRST_BANISH,
+  pardonLine,
+} from "../lib/banReactions";
 import { totalMins, fmtMins, daypartNow } from "../lib/time";
 import { decodeRecipe } from "../lib/recipe";
 import {
@@ -90,6 +96,7 @@ export default function SpinScreen({ navigation }) {
   const [hasBanished, setHasBanished] = useState(false); // picks first-run copy
   const [banishing, setBanishing] = useState(false); // the 86 moment (dish struck out)
   const [banishMsg, setBanishMsg] = useState(null); // void-coded line, under the reel
+  const [voidPending, setVoidPending] = useState(false);
   const [copy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
     idleSubline: pick(IDLE_SUBLINES),
@@ -99,6 +106,8 @@ export default function SpinScreen({ navigation }) {
   const spinSeq = useRef(0); // invalidates in-flight spins superseded by a newer action
   const bannedIdsRef = useRef([]);
   const banTallyRef = useRef(0); // lifetime bans, drives reaction tier + milestones
+  const banishedAtRef = useRef(0);
+  const hasPardonedRef = useRef(false);
 
   // Keep the wheel's exclusion state and The Void in sync. When an ID leaves
   // the void, also remove it from this session's seen list so restoring really
@@ -344,7 +353,9 @@ export default function SpinScreen({ navigation }) {
     }
 
     setBanishMsg(first ? FIRST_BANISH : banReactionFor(count));
+    banishedAtRef.current = Date.now();
     setBanishing(true); // recipe stays as the struck victim; phase stays "revealed"
+    setVoidPending(true); // the header's signature pulses once on open, then dies
   }, [
     banishing,
     recipe,
@@ -354,6 +365,28 @@ export default function SpinScreen({ navigation }) {
     hasBanished,
     applyBannedIds,
   ]);
+
+  // The way back out. Lives in the exact slot the 86 button occupied, so the
+  // finger that just did it doesn't have to go looking. Tally decrements —
+  // an undone banish shouldn't burn a milestone line.
+  const handleUndo86 = useCallback(() => {
+    if (!banishing || !recipe) return;
+    const pardoned = recipe;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    banTallyRef.current = Math.max(0, banTallyRef.current - 1);
+    setBanTally(banTallyRef.current);
+    // No releaseSeen — the dish is still on the reel, so it stays "seen" and
+    // can't be handed straight back on the next spin.
+    applyBannedIds(bannedIdsRef.current.filter((id) => id !== pardoned.id));
+    unbanRecipe(pardoned.id).catch(() => {});
+    setBanishing(false);
+    setVoidPending(false);
+    setBanishMsg(null);
+    setRevealSub(
+      pardonLine(Date.now() - banishedAtRef.current, !hasPardonedRef.current),
+    );
+    hasPardonedRef.current = true;
+  }, [banishing, recipe, applyBannedIds]);
 
   const handleVoidChange = useCallback(
     (ids) => {
@@ -416,9 +449,24 @@ export default function SpinScreen({ navigation }) {
         hasReading={hadPickOnOpen}
         onVoidChange={handleVoidChange}
         onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+        voidPending={voidPending}
+        onVoidSeen={() => setVoidPending(false)}
       />
 
       <View style={styles.body}>
+        {/* Scroll is insurance, not layout. With `flexGrow: 1` on the content
+            container this measures and behaves exactly like the plain View it
+            replaced — hero stays flex:1, the reel stays centred, nothing moves.
+            It only becomes scrollable on a screen too short to hold the tallest
+            state, where the alternative was silent clipping. Bounce and
+            over-scroll are off so it never feels loose when it isn't needed. */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
         <View style={styles.wordmarkSlot}>
           <Image
             source={require("../../assets/potluck_wordmark.webp")}
@@ -453,13 +501,19 @@ export default function SpinScreen({ navigation }) {
 
           <View style={styles.content}>
             {booting ? null : banishing ? (
+              // No card, no border, no eyebrow. The struck-out reel above
+              // already says "banished" and the Undo pill below already says
+              // "reversible" — a black slab in between was the third element
+              // saying the same thing, and it was the loudest. The reaction is
+              // a verdict in a wounded voice, so it goes in the verdict's slot
+              // and types itself out with a beat instead of landing all at once.
               <View
-                style={styles.banishCard}
+                style={styles.banishBlock}
                 accessibilityLiveRegion="polite"
                 accessibilityRole="alert"
               >
-                <Text style={styles.banishEyebrow}>BANISHED TO THE VOID</Text>
-                <Text style={styles.banishLine}>{banishMsg}</Text>
+                <TypewriterVerdict text={banishMsg} tone="void" />
+                <Text style={styles.banishHint}>Undo below, or spin on.</Text>
               </View>
             ) : isRevealed ? (
               <>
@@ -504,6 +558,8 @@ export default function SpinScreen({ navigation }) {
             )}
           </View>
         </View>
+        </ScrollView>
+
         {/* The dock. A fixed shelf the controls live on, flush to the bottom
             edge — so the hero above it is a constant size and the reel cannot
             drift when the buttons change. */}
@@ -511,91 +567,101 @@ export default function SpinScreen({ navigation }) {
           style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 16) }]}
         >
           <View style={styles.dockInner}>
-          {booting ? null : isRevealed ? (
-            <>
-              {/* Nothing moves during a banish — the primary slot keeps its
+            {booting ? null : isRevealed ? (
+              <>
+                {/* Nothing moves during a banish — the primary slot keeps its
                   place and just goes dark and dead. The joke is the copy. */}
-              <PotluckButton
-                icon={banishing ? "silverware-clean" : "silverware-fork-knife"}
-                title={banishing ? "Gone." : "See the recipe"}
-                subtitle={
-                  banishing
-                    ? "You did this. There's nothing to read."
-                    : "Ingredients, steps, the lot"
-                }
-                gradientColors={banishing ? VOID_GRADIENT : TEAL_GRADIENT}
-                shadowColor={banishing ? colors.tealDark : TEAL_SHADOW}
-                onPress={handleSeeRecipe}
-                disabled={banishing}
-              />
-              <View style={styles.secondaryRow}>
-                <TouchableOpacity
-                  onPress={handleSpin}
-                  style={styles.rerollBtn}
-                  activeOpacity={0.7}
-                  disabled={isSpinning || loading}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                >
-                  <Icon source="refresh" size={18} color={colors.teal} />
-                  <Text style={styles.rerollBtnLabel} numberOfLines={2}>
-                    {rerollLabel}
-                  </Text>
-                </TouchableOpacity>
-                {banishing ? (
-                  <View
-                    style={styles.banishedPill}
-                    accessibilityRole="text"
-                    accessibilityLabel="This recipe has been 86'd"
-                  >
-                    <Text style={styles.banishedPillLabel}>86</Text>
-                  </View>
-                ) : isLocked ? (
-                  <View
-                    style={styles.lockedPill}
-                    accessibilityRole="text"
-                    accessibilityLabel="This recipe is locked in and cannot be 86'd"
-                  >
-                    <Icon source="lock" size={15} color={colors.teal} />
-                    <Text style={styles.lockedPillLabel}>Locked</Text>
-                  </View>
-                ) : (
+                <PotluckButton
+                  icon={
+                    banishing ? "silverware-clean" : "silverware-fork-knife"
+                  }
+                  title={banishing ? "Gone." : "See the recipe"}
+                  subtitle={
+                    banishing
+                      ? "You did this."
+                      : "Ingredients, steps, the lot"
+                  }
+                  gradientColors={banishing ? VOID_GRADIENT : TEAL_GRADIENT}
+                  shadowColor={banishing ? colors.tealDark : TEAL_SHADOW}
+                  onPress={handleSeeRecipe}
+                  disabled={banishing}
+                />
+                <View style={styles.secondaryRow}>
                   <TouchableOpacity
-                    onPress={handle86}
-                    style={styles.banBtn}
+                    onPress={handleSpin}
+                    style={styles.rerollBtn}
                     activeOpacity={0.7}
                     disabled={isSpinning || loading}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    accessibilityLabel="86 this recipe — banish it from the wheel"
                   >
-                    <Text style={styles.banBtnLabel}>86</Text>
+                    <Icon source="refresh" size={18} color={colors.teal} />
+                    <Text style={styles.rerollBtnLabel} numberOfLines={2}>
+                      {rerollLabel}
+                    </Text>
                   </TouchableOpacity>
-                )}
-              </View>
-            </>
-          ) : (
-            <Animated.View
-              style={[styles.ctaWrap, { transform: [{ scale: scaleAnim }] }]}
-            >
-              <PotluckButton
-                icon="dice-multiple"
-                title="Spin"
-                subtitle={
-                  isSpinning
-                    ? "The wheel decides…"
-                    : "Let the universe pick dinner"
-                }
-                gradientColors={TEAL_GRADIENT}
-                shadowColor={TEAL_SHADOW}
-                onPress={handleSpin}
-                loading={isSpinning}
-              />
-              {/* Held while spinning so the shelf doesn't twitch mid-spin —
+                  {banishing ? (
+                    <TouchableOpacity
+                      onPress={handleUndo86}
+                      style={styles.undoPill}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Undo the 86 — bring this dish back"
+                    >
+                      <Icon
+                        source="undo-variant"
+                        size={16}
+                        color={colors.orange}
+                      />
+                      <Text style={styles.undoPillLabel}>Undo</Text>
+                    </TouchableOpacity>
+                  ) : isLocked ? (
+                    <View
+                      style={styles.lockedPill}
+                      accessibilityRole="text"
+                      accessibilityLabel="This recipe is locked in and cannot be 86'd"
+                    >
+                      <Icon source="lock" size={15} color={colors.teal} />
+                      <Text style={styles.lockedPillLabel}>Locked</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handle86}
+                      style={styles.banBtn}
+                      activeOpacity={0.7}
+                      disabled={isSpinning || loading}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      accessibilityLabel="86 this recipe — banish it from the wheel"
+                    >
+                      <Text style={styles.banBtnLabel}>86</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            ) : (
+              <Animated.View
+                style={[styles.ctaWrap, { transform: [{ scale: scaleAnim }] }]}
+              >
+                <PotluckButton
+                  icon="dice-multiple"
+                  title="Spin"
+                  subtitle={
+                    isSpinning
+                      ? "The wheel decides…"
+                      : "Let the universe pick dinner"
+                  }
+                  gradientColors={TEAL_GRADIENT}
+                  shadowColor={TEAL_SHADOW}
+                  onPress={handleSpin}
+                  loading={isSpinning}
+                />
+                {/* Held while spinning so the shelf doesn't twitch mid-spin —
                   the wheel is the thing that should be moving, not the copy. */}
-              <Text style={styles.dockSubline} numberOfLines={2}>
-                {isSpinning ? " " : copy.idleSubline}
-              </Text>
-            </Animated.View>
-          )}
+                <Text style={styles.dockSubline} numberOfLines={2}>
+                  {isSpinning ? " " : copy.idleSubline}
+                </Text>
+              </Animated.View>
+            )}
           </View>
         </View>
       </View>
@@ -603,7 +669,6 @@ export default function SpinScreen({ navigation }) {
       {!booting && (
         <OnboardingSheet visible={showOnboarding} onClose={dismissOnboarding} />
       )}
-
     </View>
   );
 }
@@ -611,7 +676,16 @@ export default function SpinScreen({ navigation }) {
 // ── Styles ──────────────────────────────────────────────────────────────────--
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.offWhite, overflow: "hidden" },
-  body: { flex: 1, alignItems: "center", paddingHorizontal: 16 },
+  // alignItems deliberately absent — centring happens on the ScrollView's
+  // content container now; setting it here as well fights the scroll child.
+  body: { flex: 1, paddingHorizontal: 16 },
+  scroll: { flex: 1, width: "100%" },
+  // flexGrow, NOT flex. flexGrow lets the container match the viewport when the
+  // content is shorter (so hero's flex:1 still has a height to divide and the
+  // reel still centres) while allowing it to exceed the viewport when a state
+  // genuinely doesn't fit. `flex: 1` would clamp it to the viewport and we'd be
+  // back to clipping.
+  scrollContent: { flexGrow: 1, alignItems: "center" },
 
   wordmarkSlot: { paddingTop: 14, paddingBottom: 4, alignItems: "center" },
 
@@ -636,6 +710,10 @@ const styles = StyleSheet.create({
     // and shunt the reel. One height for every state is the only thing that
     // actually pins it. Anything taller than this box overflows it rather than
     // moving the reel, which is the trade we want.
+    //
+    // Back to 100 now the banish card is gone: with the reaction typing into
+    // the verdict slot, the tallest state is once again a two-line verdict plus
+    // the meta row, which is what this number was originally sized for.
     marginTop: 14,
     height: 100,
   },
@@ -647,32 +725,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // The 86 moment — a slab of the void, matching The Void tab in AboutSheet so
-  // banishing and reviewing a banishment read as the same place.
-  banishCard: {
-    width: "100%",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    backgroundColor: colors.tealDark,
-    // Orange, and thick enough to read as a warning band rather than a hairline
-    // — the void speaking with the 86 control's own colour.
-    borderWidth: 3,
-    borderColor: colors.primary,
-  },
-  banishEyebrow: {
-    fontFamily: "RalewayBold",
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: colors.primary,
-    marginBottom: 6,
-  },
-  banishLine: {
-    fontFamily: "RalewayBold",
-    fontSize: 17,
-    lineHeight: 23,
-    color: colors.offWhite,
+  // The 86 moment. Just a stack now — the void's colour lives in the typed
+  // line itself, not in a container around it.
+  banishBlock: { width: "100%", alignItems: "center" },
+
+  // The one piece of plain instruction in the whole banish moment. The typed
+  // line does the joke; this line makes sure nobody thinks the dish is actually
+  // gone forever. Quiet enough not to trample the punchline above it.
+  banishHint: {
+    fontFamily: "Raleway",
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.tealDark,
+    opacity: 0.7,
+    marginTop: 10,
     textAlign: "center",
   },
   errorText: {
@@ -817,7 +883,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   // Void colourway: the button that sends a dish to the void is already dressed
-  // as the void. Same dark ground + orange pairing as banishCard, the onboarding
+  // as the void. Same dark ground + orange pairing as the onboarding
   // aside and The Void well, so the whole mechanic reads as one place.
   banBtn: {
     flexDirection: "row",
@@ -836,9 +902,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
   },
-  // Spent 86 — identical geometry to banBtn so the row never shifts width, and
-  // the same void colourway held at half strength: the button has been used.
-  banishedPill: {
+  // The way back. Same geometry as banBtn so the row never shifts width; orange
+  // on the void ground, but at border weight 3 so it reads as the live control
+  // in the row rather than the dead stamp it replaced.
+  undoPill: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -847,15 +914,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: colors.primary + "59",
+    borderColor: colors.orange + "59",
     backgroundColor: colors.tealDark,
-    opacity: 0.9,
   },
-  banishedPillLabel: {
+  undoPillLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 14,
-    color: colors.primary,
-    opacity: 0.5,
-    textDecorationLine: "line-through",
+    color: colors.orange,
   },
 });

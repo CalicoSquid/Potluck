@@ -259,7 +259,6 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
             { transform: [{ scale: locked ? lockScale : 1 }] },
           ]}
         >
-          <View style={styles.notch} />
           <View style={styles.reelWindow}>
             {locked ? (
               <Image
@@ -292,11 +291,17 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
       {/* ── Tagline (typed) — styled identically to the verdict "voice" ── */}
       <View style={styles.tagline}>
         <Text style={styles.taglineText} numberOfLines={1}>
-          {taglineCount > 0 ? <Text style={styles.quoteMark}>“</Text> : null}
-          {TAGLINE_TEXT.slice(0, taglineCount)}
-          {taglineCount < TAGLINE_LEN
-            ? <Text style={styles.caret}>|</Text>
-            : <Text style={styles.quoteMark}>”</Text>}
+          {taglineCount > 0 ? (
+            <>
+              <Text style={styles.quoteMark}>“</Text>
+              {TAGLINE_TEXT.slice(0, taglineCount)}
+              {taglineCount < TAGLINE_LEN ? (
+                <Text style={styles.caret}>|</Text>
+              ) : (
+                <Text style={styles.quoteMark}>”</Text>
+              )}
+            </>
+          ) : null}
         </Text>
       </View>
 
@@ -335,14 +340,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   reel: {
-    width:           REEL_WIDTH,
-    height:          REEL_HEIGHT,
-    borderRadius:    16,
-    backgroundColor: "#ffffff",
-    borderWidth:     1.5,
-    borderColor:     colors.border,
-    padding:         3,
-    position:        "relative",
+    width: REEL_WIDTH,
+    height: REEL_HEIGHT,
+    borderRadius: 18,
+    backgroundColor: colors.offWhite,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 3,
+    position: "relative",
+    // iOS only — Android elevation is deliberately omitted. Elevation on a view
+    // inside an opacity-animated parent gets composited offscreen and the
+    // shadow renders as an unclipped grey rectangle mid-fade.
+    shadowColor: colors.teal,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  reelWindow: {
+    flex: 1,
+    borderRadius: 15,
+    overflow: "hidden",
+    backgroundColor: colors.offWhite,
+    alignItems: "center",
+    justifyContent: "center",
   },
   reelLocked: {
     borderColor: colors.orange + "90",
@@ -358,14 +378,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 3,
     zIndex:                 2,
   },
-  reelWindow: {
-    flex:            1,
-    borderRadius:    13,
-    overflow:        "hidden",
-    backgroundColor: "#ffffff",
-    alignItems:      "center",
-    justifyContent:  "center",
-  },
+ 
   spinEmoji: {
     fontSize:   48,
     lineHeight: 56,

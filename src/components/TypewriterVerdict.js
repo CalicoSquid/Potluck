@@ -11,7 +11,7 @@ import { colors } from "../constants/colors";
 // verdict is short and two once it wraps mid-type, and since the hero is
 // centred, every wrap shunts the reel above it. Reserve the final size up front
 // and nothing moves.
-export default function TypewriterVerdict({ text }) {
+export default function TypewriterVerdict({ text, tone = "default" }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -29,26 +29,33 @@ export default function TypewriterVerdict({ text }) {
   const full = text || "";
   const shown = full.slice(0, count);
   const typing = count < full.length;
+  const isVoid = tone === "void";
+  const toneStyle = isVoid ? styles.voidTone : null;
+  // In the void voice the body text is orange, so orange quote marks and caret
+  // would vanish into it. Black pulls them back out and reads as the void
+  // itself doing the framing.
+  const markStyle = isVoid ? styles.voidQuoteMark : styles.quoteMark;
+  const caretStyle = isVoid ? styles.voidCaret : styles.caret;
 
   return (
     <View style={styles.wrap}>
       {/* Spacer: full text, invisible, sets the final height from frame one. */}
       <Text
-        style={[styles.revealQuote, styles.spacer]}
+        style={[styles.revealQuote, toneStyle, styles.spacer]}
         aria-hidden
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
-        <Text style={styles.quoteMark}>“</Text>
+        <Text style={markStyle}>“</Text>
         {full}
-        <Text style={styles.quoteMark}>”</Text>
+        <Text style={markStyle}>”</Text>
       </Text>
 
-      <Text style={[styles.revealQuote, styles.typed]}>
-        <Text style={styles.quoteMark}>“</Text>
+      <Text style={[styles.revealQuote, toneStyle, styles.typed]}>
+        <Text style={markStyle}>“</Text>
         {shown}
-        {typing ? <Text style={styles.caret}>|</Text> : null}
-        <Text style={styles.quoteMark}>”</Text>
+        {typing ? <Text style={caretStyle}>|</Text> : null}
+        <Text style={markStyle}>”</Text>
       </Text>
     </View>
   );
@@ -64,10 +71,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 4,
   },
+  // The wounded voice. Same typing, same quote marks, same caret — only the
+  // colour changes, so a banish reads as the universe still talking rather than
+  // as a different piece of UI arriving.
+  voidTone: { color: colors.primary },
   // Holds the box at its final size without being seen or read aloud.
   spacer: { opacity: 0 },
   // The visible layer, laid over the invisible spacer.
   typed: { ...StyleSheet.absoluteFillObject },
   quoteMark: { fontFamily: "RalewayBold", fontSize: 24, color: colors.orange },
+  voidQuoteMark: { fontFamily: "RalewayBold", fontSize: 24, color: colors.black },
+  voidCaret: { fontFamily: "RalewayBold", fontSize: 19, color: colors.black },
   caret: { fontFamily: "RalewayBold", fontSize: 19, color: colors.orange },
 });

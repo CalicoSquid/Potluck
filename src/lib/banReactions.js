@@ -67,6 +67,48 @@ const MILESTONES = {
   50: "Fifty. I've written a strongly-worded letter.",
 };
 
+// ── Pardon reactions ─────────────────────────────────────────────────────────
+// Undoing a 86 is the user blinking first. The universe, having just been
+// wounded, has three ways to take that: smug, gracious, or plainly relieved.
+// Which pool you get depends on how long the dish sat in the void — a two-second
+// undo is panic and gets ribbed for it; a considered one gets grace.
+
+// Undone almost immediately — caught in the act.
+const PARDON_INSTANT = [
+  "Ha. Couldn't do it, could you.",
+  "That lasted all of a moment. I'm flattered.",
+  "Back already? Your resolve is magnificent.",
+  "Panic un-pressed. We've all been there.",
+  "You blinked. I saw you blink.",
+];
+
+// Undone after a beat — the universe is gracious, or pretends to be.
+const PARDON_CONSIDERED = [
+  "Forgiven. It's forgiven. We move on.",
+  "Back from the void. Don't make a habit of it.",
+  "I'll pretend that never happened.",
+  "Good. It deserved better and so did you.",
+  "Pardoned. The void is disappointed; I am not.",
+];
+
+// A quiet third register — genuine relief, no barb. Used sparingly so the
+// snark elsewhere keeps its edge.
+const PARDON_RELIEVED = [
+  "Oh, thank goodness. I liked that one.",
+  "There it is. Back where it belongs.",
+  "I wasn't going to say anything, but: good.",
+];
+
+export const FIRST_PARDON =
+  "…You can bring them back? Nobody tell the others.";
+
+// `ms` = how long the dish spent banished. `firstEver` gates the one-time line.
+export const pardonLine = (ms, firstEver = false) => {
+  if (firstEver) return FIRST_PARDON;
+  if (ms < 4000) return pick(PARDON_INSTANT);
+  return Math.random() < 0.3 ? pick(PARDON_RELIEVED) : pick(PARDON_CONSIDERED);
+};
+
 const tierFor = (n) =>
   n >= 20 ? RESIGNED : n >= 10 ? WOUNDED : n >= 5 ? PERSONAL : AFFRONTED;
 
