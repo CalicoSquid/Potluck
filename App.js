@@ -1,7 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 import { ApolloProvider } from "@apollo/client/react";
 import { Provider as PaperProvider } from "react-native-paper";
 import { useFonts } from "expo-font";
@@ -79,7 +82,7 @@ export default function App() {
             read that clears `booting` — all happened in full view, one after
             another. That cascade is the flash. Behind the splash it costs
             nothing: by the time the curtain lifts the screen has settled. */}
-        <SafeAreaProvider>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
           <ApolloProvider client={client}>
             <PaperProvider>
               <RootNavigator />

@@ -375,9 +375,7 @@ export default function Centerpiece({ phase, recipe, size, badge, banished }) {
             pointerEvents="none"
             style={[StyleSheet.absoluteFill, cp.banishScrim, { opacity: banishFade }]}
           >
-            <View style={cp.banishStamp}>
-              <Text style={cp.banishStampText}>86</Text>
-            </View>
+           
           </Animated.View>
           <View style={cp.cardFooter}>
             {/* The card is unpressable during a banish (SpinScreen disables the

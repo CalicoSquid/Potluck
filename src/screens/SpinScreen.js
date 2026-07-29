@@ -11,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   Dimensions,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -81,6 +82,16 @@ const DOCK_CONTENT_HEIGHT = 154;
 export default function SpinScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
+  // Edge-to-edge is mandatory on SDK 54, so this padding is the only thing
+  // between the dock and the nav bar. A reported inset of 0 on Android is a bad
+  // reading, not a real "no nav bar" — gesture nav reports ~24 and a
+  // three-button bar ~48. Falling back to the old 16 floor put the controls
+  // under the buttons on older devices, so treat 0 as the button-nav case.
+  const navPad =
+    Platform.OS === "android" && insets.bottom === 0
+      ? 48
+      : Math.max(insets.bottom, 16) + 6;
+
   const [phase, setPhase] = useState("idle"); // idle | spinning | revealed
   const [recipe, setRecipe] = useState(null);
   const [committedId, setCommittedId] = useState(null); // id of today's locked-in pick, if we opened into one
@@ -97,6 +108,7 @@ export default function SpinScreen({ navigation }) {
   const [banishing, setBanishing] = useState(false); // the 86 moment (dish struck out)
   const [banishMsg, setBanishMsg] = useState(null); // void-coded line, under the reel
   const [voidPending, setVoidPending] = useState(false);
+  const [dockFloor, setDockFloor] = useState(DOCK_CONTENT_HEIGHT);
   const [copy] = useState(() => ({
     idleHeadline: pick(IDLE_HEADLINES),
     idleSubline: pick(IDLE_SUBLINES),
@@ -467,106 +479,109 @@ export default function SpinScreen({ navigation }) {
           bounces={false}
           overScrollMode="never"
         >
-        <View style={styles.wordmarkSlot}>
-          <Image
-            source={require("../../assets/potluck_wordmark.webp")}
-            style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
-            resizeMode="contain"
-          />
-        </View>
+          <View style={styles.wordmarkSlot}>
+            <Image
+              source={require("../../assets/potluck_wordmark.webp")}
+              style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
+              resizeMode="contain"
+            />
+          </View>
 
-        <View style={styles.hero}>
-          {!booting && (
-            <Pressable
-              onPress={isRevealed ? handleSeeRecipe : handleSpin}
-              disabled={isSpinning || loading || banishing}
-              style={({ pressed }) => [
-                styles.wheelTap,
-                pressed && !isSpinning && { transform: [{ scale: 0.97 }] },
-              ]}
-            >
-              <Centerpiece
-                phase={phase}
-                recipe={recipe}
-                size={CENTER_SIZE}
-                banished={banishing}
-                badge={
-                  isRevealed && !banishing && recipe?.id === committedId
-                    ? "LOCKED IN"
-                    : null
-                }
-              />
-            </Pressable>
-          )}
-
-          <View style={styles.content}>
-            {booting ? null : banishing ? (
-              // No card, no border, no eyebrow. The struck-out reel above
-              // already says "banished" and the Undo pill below already says
-              // "reversible" — a black slab in between was the third element
-              // saying the same thing, and it was the loudest. The reaction is
-              // a verdict in a wounded voice, so it goes in the verdict's slot
-              // and types itself out with a beat instead of landing all at once.
-              <View
-                style={styles.banishBlock}
-                accessibilityLiveRegion="polite"
-                accessibilityRole="alert"
+          <View style={styles.hero}>
+            {!booting && (
+              <Pressable
+                onPress={isRevealed ? handleSeeRecipe : handleSpin}
+                disabled={isSpinning || loading || banishing}
+                style={({ pressed }) => [
+                  styles.wheelTap,
+                  pressed && !isSpinning && { transform: [{ scale: 0.97 }] },
+                ]}
               >
-                <TypewriterVerdict text={banishMsg} tone="void" />
-                <Text style={styles.banishHint}>Undo below, or spin on.</Text>
-              </View>
-            ) : isRevealed ? (
-              <>
-                <TypewriterVerdict text={revealSub} />
-                {(timeStr || yieldStr) && (
-                  <View style={styles.metaRow}>
-                    {timeStr && (
-                      <Text style={styles.metaText}>⏱ {timeStr}</Text>
-                    )}
-                    {timeStr && yieldStr ? (
-                      <View style={styles.metaDot} />
-                    ) : null}
-                    {yieldStr && (
-                      <Text style={styles.metaText} numberOfLines={1}>
-                        🍽 {yieldStr}
-                      </Text>
-                    )}
-                  </View>
-                )}
-                {/* A failed reroll keeps the current dish on screen — surface
+                <Centerpiece
+                  phase={phase}
+                  recipe={recipe}
+                  size={CENTER_SIZE}
+                  banished={banishing}
+                  badge={
+                    isRevealed && !banishing && recipe?.id === committedId
+                      ? "LOCKED IN"
+                      : null
+                  }
+                />
+              </Pressable>
+            )}
+
+            <View style={styles.content}>
+              {booting ? null : banishing ? (
+                // No card, no border, no eyebrow. The struck-out reel above
+                // already says "banished" and the Undo pill below already says
+                // "reversible" — a black slab in between was the third element
+                // saying the same thing, and it was the loudest. The reaction is
+                // a verdict in a wounded voice, so it goes in the verdict's slot
+                // and types itself out with a beat instead of landing all at once.
+                <View
+                  style={styles.banishBlock}
+                  accessibilityLiveRegion="polite"
+                  accessibilityRole="alert"
+                >
+                  <TypewriterVerdict text={banishMsg} tone="void" />
+                </View>
+              ) : isRevealed ? (
+                <>
+                  <TypewriterVerdict text={revealSub} />
+                  {(timeStr || yieldStr) && (
+                    <View style={styles.metaRow}>
+                      {timeStr && (
+                        <Text style={styles.metaText}>⏱ {timeStr}</Text>
+                      )}
+                      {timeStr && yieldStr ? (
+                        <View style={styles.metaDot} />
+                      ) : null}
+                      {yieldStr && (
+                        <Text style={styles.metaText} numberOfLines={1}>
+                          🍽 {yieldStr}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  {/* A failed reroll keeps the current dish on screen — surface
                     the error *below* the verdict so it reads as "that spin
                     didn't take", not "this dish is broken". */}
-                {errorMsg ? (
-                  <Text style={styles.errorLine} numberOfLines={2}>
-                    {errorMsg}
-                  </Text>
-                ) : null}
-              </>
-            ) : isSpinning ? (
-              <Text style={styles.headline}>The universe is deciding…</Text>
-            ) : errorMsg ? (
-              // "You've 86'd everything" runs long — clipping it to two lines
-              // ate the punchline.
-              <Text style={styles.errorText} numberOfLines={4}>
-                {errorMsg}
-              </Text>
-            ) : (
-              // The subline now lives in the dock, under the Spin button —
-              // close to the thing it's talking about, and it fills the slot
-              // the reserved shelf leaves empty at idle.
-              <Text style={styles.headline}>{copy.idleHeadline}</Text>
-            )}
+                  {errorMsg ? (
+                    <Text style={styles.errorLine} numberOfLines={2}>
+                      {errorMsg}
+                    </Text>
+                  ) : null}
+                </>
+              ) : isSpinning ? (
+                <Text style={styles.headline}>The universe is deciding…</Text>
+              ) : errorMsg ? (
+                // "You've 86'd everything" runs long — clipping it to two lines
+                // ate the punchline.
+                <Text style={styles.errorText} numberOfLines={4}>
+                  {errorMsg}
+                </Text>
+              ) : (
+                // The subline now lives in the dock, under the Spin button —
+                // close to the thing it's talking about, and it fills the slot
+                // the reserved shelf leaves empty at idle.
+                <Text style={styles.headline}>{copy.idleHeadline}</Text>
+              )}
+            </View>
           </View>
-        </View>
         </ScrollView>
 
         {/* The dock. A fixed shelf the controls live on, flush to the bottom
             edge — so the hero above it is a constant size and the reel cannot
             drift when the buttons change. */}
-        <View
-          style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 16) }]}
-        >
-          <View style={styles.dockInner}>
+        <View style={[styles.dock, { paddingBottom: navPad }]}>
+          <View
+            style={styles.dockInner}
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (isRevealed && h > dockFloor) setDockFloor(h);
+            }}
+          >
             {booting ? null : isRevealed ? (
               <>
                 {/* Nothing moves during a banish — the primary slot keeps its
@@ -577,9 +592,7 @@ export default function SpinScreen({ navigation }) {
                   }
                   title={banishing ? "Gone." : "See the recipe"}
                   subtitle={
-                    banishing
-                      ? "You did this."
-                      : "Ingredients, steps, the lot"
+                    banishing ? "You did this." : "Ingredients, steps, the lot"
                   }
                   gradientColors={banishing ? VOID_GRADIENT : TEAL_GRADIENT}
                   shadowColor={banishing ? colors.tealDark : TEAL_SHADOW}
@@ -611,7 +624,7 @@ export default function SpinScreen({ navigation }) {
                       <Icon
                         source="undo-variant"
                         size={16}
-                        color={colors.orange}
+                        color={colors.primary}
                       />
                       <Text style={styles.undoPillLabel}>Undo</Text>
                     </TouchableOpacity>
@@ -725,22 +738,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // The 86 moment. Just a stack now — the void's colour lives in the typed
-  // line itself, not in a container around it.
-  banishBlock: { width: "100%", alignItems: "center" },
-
-  // The one piece of plain instruction in the whole banish moment. The typed
-  // line does the joke; this line makes sure nobody thinks the dish is actually
-  // gone forever. Quiet enough not to trample the punchline above it.
-  banishHint: {
-    fontFamily: "Raleway",
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.tealDark,
-    opacity: 0.7,
-    marginTop: 10,
-    textAlign: "center",
-  },
   errorText: {
     fontFamily: "RalewayBold",
     fontSize: 14,
@@ -802,29 +799,30 @@ const styles = StyleSheet.create({
   // it's just where the screen ends and the controls begin. The hairline is the
   // only thing marking it, and it's doing structural work (the comic dots run
   // right up to it), not decorative.
+  // No explicit width: `body` no longer centres its children, so a definite
+  // width would be laid out from the left edge and the negative margins would
+  // pull it 32pt off-centre. Letting it stretch means the margin box fills
+  // `body` and the bleed lands evenly on both screen edges.
   dock: {
-    width: "100%",
     marginHorizontal: -16,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 5,
     backgroundColor: colors.offWhite,
     borderTopWidth: 1,
     borderColor: tealAlpha(0.08),
   },
   dockInner: {
     width: "100%",
-    height: DOCK_CONTENT_HEIGHT,
-    // Centred, not top-aligned. The idle state is one button in a box sized for
-    // two rows, so ~60pt is spare — dumping all of it below the button reads as
-    // a gap, while splitting it above and below reads as a button sitting in a
-    // shelf. In the revealed state the contents fill the box exactly and this
-    // has no effect.
+    // minHeight, not height. 154 is the reservation that stops the reel drifting
+    // between idle and revealed — but the revealed state fills it exactly, so on
+    // any device where a label wraps, a hard height centred the overflow and
+    // spilled the secondary row off both ends. A floor still pins the idle state
+    // (the only one that was ever short) while letting a wrapped state grow.
+    // Growth is absorbed by the ScrollView above, which is what it's there for.
+    minHeight: DOCK_CONTENT_HEIGHT,
     justifyContent: "center",
   },
   ctaWrap: { width: "100%" },
-  // The idle voice, sat under the Spin button in the shelf. Sized so the CTA
-  // plus this line comes to roughly the height of the revealed state's two
-  // rows, which is what stops the shelf feeling half-empty at idle.
   dockSubline: {
     fontFamily: "Raleway",
     fontSize: 13,
@@ -841,7 +839,7 @@ const styles = StyleSheet.create({
   secondaryRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 12,
+    marginTop: 8,
     width: "100%",
   },
   rerollBtn: {
@@ -914,12 +912,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: colors.orange + "59",
+    borderColor: colors.primary + "59",
     backgroundColor: colors.tealDark,
   },
   undoPillLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 14,
-    color: colors.orange,
+    color: colors.primary,
   },
 });
