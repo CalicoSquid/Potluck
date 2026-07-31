@@ -306,11 +306,12 @@ export default function DoneScreen({ navigation, route }) {
           </TouchableOpacity>
         ) : null}
 
-        {/* One soft Savor nudge */}
+        {/* One soft Savor nudge, below the line — a separate offer, not the
+            next step in the flow. */}
+        <View style={styles.savorDivider} />
+
         <View style={styles.savorBlock}>
-          <Text style={styles.savorLine}>
-            Savor is where recipes like this live.
-          </Text>
+          
           <PotluckButton
             imageIcon={require("../../assets/savor-logo.png")}
             title="Save this to Savor"
@@ -435,7 +436,11 @@ const styles = StyleSheet.create({
   },
 
   shareBtn: {
-    marginTop: 26,
+    // Tight to "Get cooking" — these two are one group (both about tonight's
+    // dish), so they should read as a pair rather than two lone buttons. The
+    // old 26 matched every other gap on the screen, which is why nothing
+    // grouped and the whole column felt evenly floated.
+    marginTop: 10,
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
@@ -454,8 +459,18 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  cookBlock: { width: "100%", marginTop: 24 },
-  savorBlock: { width: "100%", alignItems: "center", marginTop: 28 },
+  // Opens the action group, set off from the narrative above it.
+  cookBlock: { width: "100%", marginTop: 28 },
+  // A different kind of thing entirely — not about tonight, about keeping it.
+  // The rule plus the wider gap make that break deliberate instead of looking
+  // like another equal interval.
+  savorDivider: {
+    width: 56,
+    height: 1,
+    marginTop: 24,
+    backgroundColor: tealAlpha(0.14),
+  },
+  savorBlock: { width: "100%", alignItems: "center", marginTop: 15 },
   savorLine: {
     fontFamily: "Raleway",
     fontSize: 13,
@@ -463,11 +478,11 @@ const styles = StyleSheet.create({
     color: colors.teal,
     opacity: 0.55,
     textAlign: "center",
-    marginBottom: 4,
+    marginBottom: 10,
     maxWidth: 300,
   },
 
-  spinAgain: { marginTop: 16, paddingVertical: 8 },
+  spinAgain: { marginTop: 22, paddingVertical: 8 },
   spinAgainLabel: {
     fontFamily: "RalewaySemiBold",
     fontSize: 13,
