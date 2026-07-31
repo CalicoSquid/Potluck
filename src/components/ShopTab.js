@@ -83,9 +83,16 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
         </View>
       </View>
 
-      {checkedCount > 0 && (
-        <Text style={styles.progress}>{checkedCount} of {total} grabbed</Text>
-      )}
+      {/* Always rendered, even at zero. Conditionally mounting this inserted a
+          line into the flow and shunted the whole list down the moment the
+          first box was ticked — a fade would only have made the jump prettier,
+          not absent. Holding the row and swapping its opacity keeps the list
+          exactly where the user's thumb left it. */}
+      <Text
+        style={[styles.progress, checkedCount === 0 && styles.progressHidden]}
+      >
+        {checkedCount} of {total} grabbed
+      </Text>
 
       <PotluckCard style={styles.listCard}>
         {items.map((it, i) => (
@@ -105,9 +112,16 @@ const ShopTab = ({ ingredients, recipeName, recipeId, recipeYield }) => {
         ))}
       </PotluckCard>
 
-      {checkedCount === total && total > 0 && (
-        <Text style={styles.allDone}>All grabbed — time to cook!</Text>
-      )}
+      {/* Same reservation as the counter above: this used to appear the instant
+          the last box was ticked and push everything below it. */}
+      <Text
+        style={[
+          styles.allDone,
+          !(checkedCount === total && total > 0) && styles.progressHidden,
+        ]}
+      >
+        All grabbed — time to cook!
+      </Text>
     </View>
   );
 };
@@ -161,6 +175,8 @@ const styles = StyleSheet.create({
     opacity:    0.55,
     marginTop:  -4,
   },
+  // Hidden, not unmounted — the row keeps its height so nothing below moves.
+  progressHidden: { opacity: 0 },
   listCard: { padding: 0 },
   row: {
     flexDirection:     "row",

@@ -16,7 +16,12 @@ import * as Haptics from "expo-haptics";
 import { captureRef } from "react-native-view-shot";
 import RNShare from "react-native-share";
 
-import { colors, tealAlpha } from "../constants/colors";
+import {
+  colors,
+  tealAlpha,
+  TEAL_GRADIENT,
+  TEAL_SHADOW,
+} from "../constants/colors";
 import { commitTodaysPick } from "../lib/readings";
 import { unbanRecipe } from "../lib/banStore";
 import { fmtTotal } from "../lib/time";
@@ -264,6 +269,24 @@ export default function DoneScreen({ navigation, route }) {
 
         <Text style={styles.exhale}>{exhale}</Text>
 
+        {/* The natural next move. You lock in BEFORE you cook, so this screen
+            is a commitment, not a completion — and the first thing anyone wants
+            from a dish they've just committed to is the method. `navigate`, not
+            `push`: Recipe is already below this in the stack, so this pops back
+            to the existing instance instead of growing the stack every lap. */}
+        {recipe?.name ? (
+          <View style={styles.cookBlock}>
+            <PotluckButton
+              icon="silverware-fork-knife"
+              title="Get cooking"
+              subtitle="Ingredients, steps, the lot"
+              gradientColors={TEAL_GRADIENT}
+              shadowColor={TEAL_SHADOW}
+              onPress={() => navigation.navigate("Recipe", { recipe })}
+            />
+          </View>
+        ) : null}
+
         {/* The brag — witty share of what fate chose */}
         {recipe?.name ? (
           <TouchableOpacity
@@ -286,7 +309,7 @@ export default function DoneScreen({ navigation, route }) {
         {/* One soft Savor nudge */}
         <View style={styles.savorBlock}>
           <Text style={styles.savorLine}>
-            Savor is where recipes like this live — saved, scaled, and yours.
+            Savor is where recipes like this live.
           </Text>
           <PotluckButton
             imageIcon={require("../../assets/savor-logo.png")}
@@ -431,6 +454,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
+  cookBlock: { width: "100%", marginTop: 24 },
   savorBlock: { width: "100%", alignItems: "center", marginTop: 28 },
   savorLine: {
     fontFamily: "Raleway",

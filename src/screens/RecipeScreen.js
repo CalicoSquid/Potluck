@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Image,
   Linking,
   Dimensions,
@@ -16,11 +17,17 @@ import { Icon } from "react-native-paper";
 import he from "he";
 import * as Haptics from "expo-haptics";
 
-import { colors, TEAL_GRADIENT, TEAL_SHADOW, PRIMARY_GRADIENT } from "../constants/colors";
+import {
+  colors,
+  tealAlpha,
+  TEAL_GRADIENT,
+  TEAL_SHADOW,
+  PRIMARY_GRADIENT,
+} from "../constants/colors";
 import { getTodaysReading, commitTodaysPick } from "../lib/readings";
 import { unbanRecipe } from "../lib/banStore";
 import { pick } from "../lib/spinCopy";
-import { saveToSavor } from "../lib/savor";
+import { saveToSavor, openSavorStore } from "../lib/savor";
 import PotluckButton from "../components/PotluckButton";
 import PotluckCard from "../components/PotluckCard";
 import PotluckHeader from "../components/PotluckHeader";
@@ -31,8 +38,11 @@ import ShopTab from "../components/ShopTab";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// Shown on "Lock it in" only when a *different* dish is already locked in today,
-// so the swap is legible without a modal. Dry, fate-aware, mildly put-out — the
+// Used in the confirm dialog when a *different* dish is already locked in
+// today. These used to be crammed into the button's subtitle, where a recipe
+// name never fit and truncated to things like "Bumps Recipe… for today." The
+// dialog has room for a whole sentence, so the voice survives and the button
+// gets a short, fixed line instead. Dry, fate-aware, mildly put-out — the
 // universe permitting itself to be overruled.
 const REPLACE_LINES = [
   (n) => `Bumps ${n} for today.`,
@@ -41,8 +51,8 @@ const REPLACE_LINES = [
   (n) => `Knocks ${n} off the top.`,
 ];
 
-// Keep the interpolated name short so the subtitle stays a tidy line.
-const shortName = (s, n = 18) =>
+// Still trimmed, but generously — this now lands in a dialog body, not a button.
+const shortName = (s, n = 40) =>
   s && s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
 
 export default function RecipeScreen({ navigation, route }) {
@@ -59,7 +69,8 @@ export default function RecipeScreen({ navigation, route }) {
   const stickyHeight = 94 + 94 + 30 + 12 + (insets.bottom || 12);
 
   const [locked, setLocked] = useState(false);
-  const [replaceLine, setReplaceLine] = useState(null); // set when a *different* dish is already locked in today
+  const [replaceName, setReplaceName] = useState(null); // name of the dish this one would bump, if any
+  const [confirmReplace, setConfirmReplace] = useState(null); // the in-voice line, shown in the dialog
 
   // On entry, reconcile against today's committed pick (if any):
   //   • same dish     → already locked in, reflect that
@@ -72,13 +83,25 @@ export default function RecipeScreen({ navigation, route }) {
         if (entry.recipe?.id === recipe.id) {
           setLocked(true);
         } else if (entry.recipe?.name) {
-          setReplaceLine(pick(REPLACE_LINES)(shortName(he.decode(entry.recipe.name))));
+          setReplaceName(shortName(he.decode(entry.recipe.name)));
         }
       })
       .catch(() => {});
   }, []);
 
+  // Replacing today's pick is the one destructive action in the app — it
+  // overwrites a commitment. Confirm it, but only in that case: a first lock of
+  // the day stays one tap, because that's the whole point of the app.
+  const requestLock = () => {
+    if (replaceName) {
+      setConfirmReplace(pick(REPLACE_LINES)(replaceName));
+      return;
+    }
+    handleLock();
+  };
+
   const handleLock = async () => {
+    setConfirmReplace(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {},
     );
@@ -91,6 +114,7 @@ export default function RecipeScreen({ navigation, route }) {
     ]).catch(() => {});
 
     setLocked(true);
+    setReplaceName(null);
     navigation.navigate("Done", { recipe });
   };
 
@@ -197,6 +221,34 @@ export default function RecipeScreen({ navigation, route }) {
                 </PotluckCard>
               ))
             )}
+
+            {/* End of the method — the point where someone has actually read
+                the thing and might want to keep it. Down here it's an offer,
+                not a pitch: it costs the sticky bottom nothing, and you only
+                meet it if you scrolled all the way through. Grey, not gradient,
+                so it never competes with the lock CTA. */}
+            <TouchableOpacity
+              style={styles.savorBtn}
+              onPress={() => saveToSavor(recipe.id)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Save this recipe to Savor"
+            >
+              <Image
+                source={require("../../assets/savor-logo.png")}
+                style={styles.savorBtnLogo}
+                resizeMode="contain"
+              />
+              <View style={styles.savorBtnText}>
+                <Text style={styles.savorBtnTitle}>Save this to Savor</Text>
+                <Text style={styles.savorBtnSub}>Keep it for good</Text>
+              </View>
+              <Icon
+                source="chevron-right"
+                size={20}
+                color={tealAlpha(0.35)}
+              />
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.tabContent}>
@@ -229,13 +281,13 @@ export default function RecipeScreen({ navigation, route }) {
             {!locked && (
               <TouchableOpacity
                 style={styles.secondaryBtn}
-                onPress={handleLock}
+                onPress={requestLock}
                 activeOpacity={0.7}
                 hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}
               >
                 <Icon source="lock-outline" size={15} color={colors.teal} />
                 <Text style={styles.secondaryLabel}>
-                  {replaceLine
+                  {replaceName
                     ? "Make this today's pick instead"
                     : "Make this today's pick"}
                 </Text>
@@ -246,15 +298,22 @@ export default function RecipeScreen({ navigation, route }) {
           <PotluckButton
             icon={locked ? "lock-check" : "lock-outline"}
             title={locked ? "Locked in for today" : "Lock it in"}
+            // Generic, never interpolated: the replace copy used to live here
+            // and truncated ugly. It's in the confirm dialog now.
             subtitle={
               locked
-                ? "Today's pick — tap to go cook"
-                : replaceLine || "Your one save for today"
+                ? "Tap to brag about it"
+                : replaceName
+                  ? "Replaces today's pick"
+                  : "Your one save for today"
             }
             gradientColors={TEAL_GRADIENT}
             shadowColor={TEAL_SHADOW}
+            // Locked keeps the primary slot because it's also the status —
+            // demoting it to a text link would lose the visual confirmation
+            // that the dish is sealed. It just advertises honestly now.
             onPress={
-              locked ? () => navigation.navigate("Done", { recipe }) : handleLock
+              locked ? () => navigation.navigate("Done", { recipe }) : requestLock
             }
           />
         )}
@@ -266,10 +325,54 @@ export default function RecipeScreen({ navigation, route }) {
           hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
         >
           <Text style={styles.spinAgainLabel}>
-            {isHistory ? "← Back" : "← Back to spinning"}
+            {/* Once committed, "back to spinning" contradicts the commitment. */}
+            {isHistory || locked ? "← Back" : "← Back to spinning"}
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Same pattern as The Void's "empty it?" dialog — no new visual language,
+          and finally somewhere with room for the whole sentence. */}
+      {confirmReplace ? (
+        <View style={styles.confirmLayer} accessibilityViewIsModal>
+          <Pressable
+            style={styles.confirmBackdrop}
+            onPress={() => setConfirmReplace(null)}
+            android_disableSound
+            accessibilityRole="button"
+            accessibilityLabel="Cancel replacing today's pick"
+          />
+
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIcon}>
+              <Icon source="swap-horizontal" size={26} color={colors.white} />
+            </View>
+
+            <Text style={styles.confirmEyebrow}>ALREADY LOCKED IN</Text>
+            <Text style={styles.confirmTitle}>Swap today's pick?</Text>
+            <Text style={styles.confirmBody}>{confirmReplace}</Text>
+
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancel}
+                onPress={() => setConfirmReplace(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmCancelLabel}>Leave it as it is</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmSwap}
+                onPress={handleLock}
+                activeOpacity={0.85}
+              >
+                <Icon source="lock-check" size={16} color={colors.white} />
+                <Text style={styles.confirmSwapLabel}>Lock this one in</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -412,6 +515,137 @@ const styles = StyleSheet.create({
     color: colors.teal,
     opacity: 0.8,
   },
+  // Deliberately grey and flat — a quiet offer at the end of the recipe, not
+  // another gradient button shouting alongside the lock CTA.
+  savorBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 24,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: tealAlpha(0.03),
+  },
+  savorBtnLogo: { width: 30, height: 30 },
+  savorBtnText: { flex: 1 },
+  savorBtnTitle: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 14,
+    color: colors.teal,
+  },
+  savorBtnSub: {
+    fontFamily: "Raleway",
+    fontSize: 12,
+    color: colors.teal,
+    opacity: 0.55,
+    marginTop: 1,
+  },
+
+  // ── Replace confirmation ──────────────────────────────────────────────────
+  confirmLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  confirmBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(12, 28, 29, 0.72)",
+  },
+  confirmCard: {
+    zIndex: 1,
+    width: "100%",
+    maxWidth: 380,
+    alignItems: "center",
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: tealAlpha(0.12),
+    backgroundColor: colors.white,
+    shadowColor: colors.teal,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
+    elevation: 16,
+  },
+  // Teal, not the void's red — swapping a pick is a decision, not a deletion.
+  confirmIcon: {
+    width: 56,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+    borderRadius: 19,
+    backgroundColor: colors.teal,
+    transform: [{ rotate: "-3deg" }],
+  },
+  confirmEyebrow: {
+    fontFamily: "RalewayBold",
+    fontSize: 10,
+    lineHeight: 14,
+    color: colors.primary,
+    letterSpacing: 1.25,
+  },
+  confirmTitle: {
+    marginTop: 3,
+    fontFamily: "RalewayBold",
+    fontSize: 23,
+    lineHeight: 29,
+    color: colors.teal,
+    textAlign: "center",
+  },
+  confirmBody: {
+    marginTop: 8,
+    fontFamily: "Raleway",
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.teal,
+    opacity: 0.66,
+    textAlign: "center",
+  },
+  confirmActions: { width: "100%", marginTop: 20, gap: 9 },
+  confirmCancel: {
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: tealAlpha(0.14),
+  },
+  confirmCancelLabel: {
+    fontFamily: "RalewayBold",
+    fontSize: 13,
+    color: colors.teal,
+    opacity: 0.72,
+  },
+  confirmSwap: {
+    minHeight: 49,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: colors.teal,
+    shadowColor: colors.teal,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmSwapLabel: {
+    fontFamily: "RalewayBold",
+    fontSize: 14,
+    color: colors.white,
+  },
+
   spinAgainBtn: { alignItems: "center", paddingVertical: 8, marginTop: 2 },
   spinAgainLabel: {
     fontFamily: "RalewaySemiBold",

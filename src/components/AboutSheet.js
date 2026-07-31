@@ -195,8 +195,11 @@ const AboutSheet = ({ visible, onClose, onVoidChange }) => {
         />
 
         <View style={styles.sheet}>
-          <View style={styles.notch} />
-
+          {/* No handle and no close button. The notch implied a drag the sheet
+              couldn't honour, and an X was furniture on something that already
+              dismisses via the backdrop and the system back button. When
+              Reanimated lands in a native build the handle comes back with a
+              real gesture behind it. */}
           <View style={styles.tabs}>
             {TABS.map((item) => (
               <TouchableOpacity
@@ -546,16 +549,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    paddingTop: 18,
+    // Was 18 + the notch's 14pt bottom margin; the notch is gone, so the sheet
+    // carries the whole gap itself and the tabs sit where they always did.
+    paddingTop: 26,
     paddingBottom: 34,
-  },
-  notch: {
-    alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.orange + "60",
-    marginBottom: 14,
   },
 
   // ── Tabs ────────────────────────────────────────────────────────────────

@@ -608,7 +608,12 @@ export default function SpinScreen({ navigation }) {
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
                     <Icon source="refresh" size={18} color={colors.teal} />
-                    <Text style={styles.rerollBtnLabel} numberOfLines={2}>
+                    <Text
+                      style={styles.rerollBtnLabel}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.85}
+                    >
                       {rerollLabel}
                     </Text>
                   </TouchableOpacity>
@@ -670,9 +675,11 @@ export default function SpinScreen({ navigation }) {
                 />
                 {/* Held while spinning so the shelf doesn't twitch mid-spin —
                   the wheel is the thing that should be moving, not the copy. */}
-                <Text style={styles.dockSubline} numberOfLines={2}>
-                  {isSpinning ? " " : copy.idleSubline}
-                </Text>
+                <View style={styles.dockSublineSlot}>
+                  <Text style={styles.dockSubline} numberOfLines={2}>
+                    {isSpinning ? " " : copy.idleSubline}
+                  </Text>
+                </View>
               </Animated.View>
             )}
           </View>
@@ -811,18 +818,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: tealAlpha(0.08),
   },
-  dockInner: {
+ dockInner: {
     width: "100%",
-    // minHeight, not height. 154 is the reservation that stops the reel drifting
-    // between idle and revealed — but the revealed state fills it exactly, so on
-    // any device where a label wraps, a hard height centred the overflow and
-    // spilled the secondary row off both ends. A floor still pins the idle state
-    // (the only one that was ever short) while letting a wrapped state grow.
-    // Growth is absorbed by the ScrollView above, which is what it's there for.
     minHeight: DOCK_CONTENT_HEIGHT,
-    justifyContent: "center",
+    // flex-start, not center. The primary button is the same element in both
+    // states, so it has to occupy the same y in both — centring meant the idle
+    // state's shorter content floated it down and it visibly hopped on reveal.
+    // The spare idle height goes to the subline slot below instead of pooling
+    // under everything as a gap.
+    justifyContent: "flex-start",
   },
-  ctaWrap: { width: "100%" },
+  ctaWrap: { width: "100%", flex: 1 },
+  // Takes whatever's left of the reservation and centres the line inside it, so
+  // the idle shelf reads as full rather than top-heavy.
+  dockSublineSlot: { flex: 1, justifyContent: "center" },
   dockSubline: {
     fontFamily: "Raleway",
     fontSize: 13,
@@ -830,7 +839,6 @@ const styles = StyleSheet.create({
     color: colors.teal,
     opacity: 0.5,
     textAlign: "center",
-    marginTop: 6,
     paddingHorizontal: 12,
   },
 
