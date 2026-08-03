@@ -27,6 +27,9 @@ import AboutSheet from "./AboutSheet";
  *   hasReading — optional. When true, the signature pulses once on open.
  *   onLayout   — optional. Reports header height (for ComicBackground).
  *   onVoidChange — optional. Receives the current banned ID list after a restore.
+ *   voidPending  — optional. When true, the signature wears the void colourway
+ *                  and taps land on the Void tab rather than This Week.
+ *   onVoidSeen   — optional. Fired on open; clears the pending flag.
  */
 
 const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"];
@@ -209,6 +212,9 @@ const PotluckHeader = ({
   onVoidSeen,
 }) => {
   const [aboutVisible, setAboutVisible] = useState(false);
+  // Which tab the *next* open should land on. Set at press time because
+  // onVoidSeen() flips voidPending false immediately.
+  const [openTab, setOpenTab] = useState(undefined);
 
   return (
     <View style={styles.wrap} onLayout={onLayout}>
@@ -234,6 +240,11 @@ const PotluckHeader = ({
             hasReading={hasReading}
             voidPending={voidPending}
             onPress={() => {
+              // Capture the intent *before* clearing the flag. When the dots
+              // are wearing the void colourway, the tap means "show me what's
+              // in there" — landing on This Week (the sheet's default whenever
+              // any reading exists) answered a question nobody asked.
+              setOpenTab(voidPending ? "void" : undefined);
               setAboutVisible(true);
               onVoidSeen?.();   // seen is seen — the flag dies on open, not on close
             }}
@@ -252,6 +263,7 @@ const PotluckHeader = ({
         visible={aboutVisible}
         onClose={() => setAboutVisible(false)}
         onVoidChange={onVoidChange}
+        initialTab={openTab}
       />
     </View>
   );

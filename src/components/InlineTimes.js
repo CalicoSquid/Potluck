@@ -2,12 +2,21 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
 import { colors } from "../constants/colors";
+import { cleanUnit, MAX_SANE_MINS } from "../lib/time";
 
+// Reads the raw h/m block directly rather than going through sumTime, so it
+// has to do its own sanitising — cleanUnit strips negatives, NaN and absurd
+// values, and the total is dropped entirely if it exceeds two days.
 const formatTime = (t) => {
   if (!t) return null;
+
+  const h = cleanUnit(t.hours);
+  const m = cleanUnit(t.minutes);
+  if (h * 60 + m > MAX_SANE_MINS) return null;
+
   const parts = [];
-  if (t.hours   > 0) parts.push(`${t.hours}h`);
-  if (t.minutes > 0) parts.push(`${t.minutes}m`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
   return parts.length ? parts.join(" ") : null;
 };
 

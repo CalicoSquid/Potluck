@@ -76,7 +76,7 @@ const banishedWhen = (timestamp) => {
   })}`;
 };
 
-const AboutSheet = ({ visible, onClose, onVoidChange }) => {
+const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
   const version = Constants.expoConfig?.version || "";
   const navigation = useNavigation();
 
@@ -99,8 +99,21 @@ const AboutSheet = ({ visible, onClose, onVoidChange }) => {
         if (cancelled) return;
         setReadings(readingList);
         setVoidEntries(bannedList);
+        // An explicit intent from the caller wins — the header passes
+        // initialTab="void" when its dots were wearing the void colourway, so
+        // the tap lands where it looked like it would. Falls back to the
+        // normal precedence, and still degrades gracefully if the void turns
+        // out to be empty by the time the sheet opens.
         setTab(
-          readingList.length ? "week" : bannedList.length ? "void" : "about",
+          initialTab === "void" && bannedList.length
+            ? "void"
+            : initialTab === "week" && readingList.length
+              ? "week"
+              : readingList.length
+                ? "week"
+                : bannedList.length
+                  ? "void"
+                  : "about",
         );
       })
       .catch(() => {});
@@ -108,7 +121,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange }) => {
     return () => {
       cancelled = true;
     };
-  }, [visible]);
+  }, [visible, initialTab]);
 
   const hasReadings = readings.length > 0;
   const openReading = (recipe) => {

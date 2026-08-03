@@ -10,6 +10,7 @@ import {
   Linking,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -67,6 +68,18 @@ export default function RecipeScreen({ navigation, route }) {
 
   const tags = [recipe.cuisine, recipe.category].filter(Boolean);
   const stickyHeight = 94 + 94 + 30 + 12 + (insets.bottom || 12);
+
+  // The hero used to branch on recipe.image being *truthy*, which is not the
+  // same as it being loadable. A dead URL, a hotlink block or a slow CDN all
+  // gave you a blank 220px band with no placeholder and no spinner. Track the
+  // actual load instead.
+  const [imgFailed, setImgFailed] = useState(false);
+  const [imgLoading, setImgLoading] = useState(true);
+
+  useEffect(() => {
+    setImgFailed(false);
+    setImgLoading(true);
+  }, [recipe.id]);
 
   const [locked, setLocked] = useState(false);
   const [replaceName, setReplaceName] = useState(null); // name of the dish this one would bump, if any
@@ -137,13 +150,27 @@ export default function RecipeScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Hero image ── */}
-        {recipe.image ? (
+        {recipe.image && !imgFailed ? (
           <View style={styles.imageWrap}>
             <Image
               source={{ uri: recipe.image }}
               style={styles.image}
               resizeMode="cover"
+              onLoadStart={() => setImgLoading(true)}
+              onLoad={() => setImgLoading(false)}
+              onError={() => {
+                setImgLoading(false);
+                setImgFailed(true);
+              }}
             />
+            {imgLoading && (
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, styles.imageLoading]}
+              >
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            )}
           </View>
         ) : (
           <View style={[styles.imageWrap, styles.imagePlaceholder]}>
@@ -392,6 +419,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   imagePlaceholderIcon: { fontSize: 52 },
+  // Sits over the image until it resolves, so the band is never dead white.
+  imageLoading: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary + "12",
+  },
 
   metaSection: { paddingHorizontal: 20, gap: 8 },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

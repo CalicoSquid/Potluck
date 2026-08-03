@@ -254,6 +254,7 @@ export default function SpinScreen({ navigation }) {
       setSessionSpins((n) => n + 1);
       setBanishing(false);
       setBanishMsg(null);
+      setVoidPending(false);
       setPhase("spinning");
 
       Animated.sequence([
