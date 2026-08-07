@@ -95,6 +95,7 @@ export default function DoneScreen({ navigation, route }) {
   const [shareLabel] = useState(() => pick(SHARE_LABELS));
   const [cardCaption] = useState(() => pick(CARD_CAPTIONS));
 
+  const [filed, setFiled] = useState(false); // commit landed → point at the menu
   const [imgLoaded, setImgLoaded] = useState(() => !recipe?.image); // no photo → nothing to wait for
   const [imgFailed, setImgFailed] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -108,13 +109,18 @@ export default function DoneScreen({ navigation, route }) {
   // Reaching Done is the commitment signal — this dish becomes today's pick,
   // overriding whatever the universe first served (or an earlier commitment).
   useEffect(() => {
+    let cancelled = false;
     if (recipe?.id) {
-      Promise.all([
-        unbanRecipe(recipe.id),
-        commitTodaysPick(recipe),
-      ]).catch(() => {});
+      Promise.all([unbanRecipe(recipe.id), commitTodaysPick(recipe)])
+        .then(() => {
+          // Only once the write has actually landed. The pips pointing at a
+          // reading that isn't in storage yet would be a lie, briefly.
+          if (!cancelled) setFiled(true);
+        })
+        .catch(() => {});
     }
     return () => {
+      cancelled = true;
       if (shareTimeoutRef.current) clearTimeout(shareTimeoutRef.current);
     };
   }, []);
@@ -222,7 +228,10 @@ export default function DoneScreen({ navigation, route }) {
         backgroundColor="transparent"
       />
 
-      <PotluckHeader onBack={() => navigation.goBack()} />
+      {/* The dish is now in This Week, and the only door to This Week is the
+          three-dot signature. Same breathing tell the void uses after an 86 —
+          in the house colours, because nothing has gone wrong here. */}
+      <PotluckHeader onBack={() => navigation.goBack()} attention={filed} />
 
       <ScrollView
         style={styles.scroll}

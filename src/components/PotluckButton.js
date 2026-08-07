@@ -55,6 +55,9 @@ const PotluckButton = ({
   <TouchableOpacity
     onPress={loading || disabled ? null : onPress}
     activeOpacity={loading || disabled ? 1 : 0.78}
+    disabled={loading || disabled}
+    accessibilityRole="button"
+    accessibilityState={{ disabled: loading || disabled }}
     style={[styles.wrap, { shadowColor }, disabled && styles.wrapDisabled]}
   >
     <LinearGradient
@@ -78,7 +81,12 @@ const PotluckButton = ({
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
-      <Icon source="chevron-right" size={20} color="rgba(255,255,255,0.55)" />
+      {/* The affordance, not decoration. A dead button kept wearing a
+          chevron — testers read it as "this still goes somewhere" and tapped
+          a slab that does nothing. Gone when the button is. */}
+      {disabled ? null : (
+        <Icon source="chevron-right" size={20} color="rgba(255,255,255,0.55)" />
+      )}
     </LinearGradient>
   </TouchableOpacity>
 );

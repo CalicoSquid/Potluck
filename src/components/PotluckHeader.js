@@ -30,6 +30,9 @@ import AboutSheet from "./AboutSheet";
  *   voidPending  — optional. When true, the signature wears the void colourway
  *                  and taps land on the Void tab rather than This Week.
  *   onVoidSeen   — optional. Fired on open; clears the pending flag.
+ *   attention    — optional. When true, the signature breathes on a loop in the
+ *                  normal colourway — used on Done to point at the menu the
+ *                  dish was just filed into.
  */
 
 const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"];
@@ -98,18 +101,22 @@ const Signature = ({
   spinning,
   hasReading = false,
   voidPending = false,
+  attention = false,
   onPress,
 }) => {
   const dots = useRef(DOT_COLORS.map(() => new Animated.Value(0))).current;
   const greetedRef = useRef(false);
   const palette = voidPending ? VOID_DOT_COLORS : DOT_COLORS;
 
-  // A slow breath on the ember while the void has something new in it. Loops
-  // until acknowledged — unlike the reading pulse, which fires once. This one
-  // is a state, not an event.
+  // A slow breath on the middle pip. Two callers, one animation — the void
+  // uses it to say "something's in there", Done uses it to say "tonight's dish
+  // is filed in here". Deliberately not two similar animations: it's the same
+  // loop, the same dot, the same curve, and only the palette differs. Loops
+  // until acknowledged — unlike the reading pulse, which fires once.
+  const breathing = voidPending || attention;
   const ember = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!voidPending) {
+    if (!breathing) {
       ember.setValue(0);
       return;
     }
@@ -129,7 +136,7 @@ const Signature = ({
     );
     loop.start();
     return () => loop.stop();
-  }, [voidPending]);
+  }, [breathing]);
 
   // One calm pulse on open when today already has a reading waiting — a
   // heartbeat, not a notification. Fires once per mount (i.e. per app open).
@@ -163,7 +170,9 @@ const Signature = ({
       accessibilityLabel={
         voidPending
           ? "Menu — something new in the Void"
-          : "Menu — your week and the Void"
+          : attention
+            ? "Menu — tonight's dish is saved in This Week"
+            : "Menu — your week and the Void"
       }
       accessibilityRole="button"
     >
@@ -185,7 +194,7 @@ const Signature = ({
                       inputRange: [0, 1],
                       outputRange: [1, 1.5],
                     }),
-                    voidPending && i === 1
+                    breathing && i === 1
                       ? ember.interpolate({
                           inputRange: [0, 1],
                           outputRange: [1, 1.35],
@@ -210,6 +219,7 @@ const PotluckHeader = ({
   onVoidChange,
   voidPending = false,
   onVoidSeen,
+  attention = false,
 }) => {
   const [aboutVisible, setAboutVisible] = useState(false);
   // Which tab the *next* open should land on. Set at press time because
@@ -239,6 +249,7 @@ const PotluckHeader = ({
             spinning={spinning}
             hasReading={hasReading}
             voidPending={voidPending}
+            attention={attention}
             onPress={() => {
               // Capture the intent *before* clearing the flag. When the dots
               // are wearing the void colourway, the tap means "show me what's

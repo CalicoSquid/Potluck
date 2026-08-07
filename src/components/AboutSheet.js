@@ -29,6 +29,12 @@ import { openSavorStore } from "../lib/savor";
 const PRIVACY_URL = "https://getsavor.recipes/privacy";
 const COFFEE_URL = "https://buymeacoffee.com/calicosquid";
 
+// The app is English-only. `undefined` here means "use the device locale",
+// which handed a Spanish tester "sábado" sitting under English chrome — the
+// only translated string in the whole app. Pin it until there's a real
+// localisation pass to hang it off.
+const DATE_LOCALE = "en-GB";
+
 const TABS = [
   { key: "week", label: "This Week" },
   { key: "void", label: "The Void" },
@@ -41,7 +47,7 @@ const relDay = (entry) => {
   yesterday.setDate(yesterday.getDate() - 1);
   if (entry.date === dayKey()) return "Today";
   if (entry.date === dayKey(yesterday)) return "Yesterday";
-  return new Date(entry.ts).toLocaleDateString(undefined, { weekday: "long" });
+  return new Date(entry.ts).toLocaleDateString(DATE_LOCALE, { weekday: "long" });
 };
 
 const startOfDay = (time) => {
@@ -70,7 +76,7 @@ const banishedWhen = (timestamp) => {
   if (age === 0) return "Banished today";
   if (age === 1) return "Banished yesterday";
 
-  return `Banished ${new Date(timestamp).toLocaleDateString(undefined, {
+  return `Banished ${new Date(timestamp).toLocaleDateString(DATE_LOCALE, {
     month: "short",
     day: "numeric",
   })}`;

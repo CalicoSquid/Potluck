@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, AppState } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
@@ -18,10 +18,12 @@ import SplashTransition from "./src/components/SplashTransition";
 // Keep the native splash up until we explicitly hide it.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// How long the app has to have been away before a resume is worth an update
+// check — and the floor between two checks in one session.
+const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000;
+
 export default function App() {
   const [splashDone, setSplashDone] = useState(false);
-  // Read inside async callbacks, where `splashDone` would be stale.
-  const splashDoneRef = useRef(false);
 
   const [fontsLoaded, fontError] = useFonts({
     Raleway:         require("./assets/fonts/Raleway-Regular.ttf"),
@@ -31,34 +33,52 @@ export default function App() {
 
   const fontsReady = fontsLoaded || !!fontError;
 
-  // Apply an update the moment it lands, but ONLY while the splash is still up.
+  // ── Updates ───────────────────────────────────────────────────────────────
+  // Savor's model, now that testing is over: nothing at launch, ever.
   //
-  // Reloading is violent — it tears the running app down and replays the splash.
-  // The old version did that whenever the fetch happened to finish, which during
-  // an active OTA run meant: splash, app, then a hard restart back into splash a
-  // few seconds later. That was the flash.
+  // Checking on first open meant a fetch could land seconds after the splash
+  // lifted, and applying it replayed the whole boot — splash, app, splash. The
+  // double splash testers were seeing was that, by design, and it was only ever
+  // worth it to shorten the loop for testers on a hot bug.
   //
-  // But deferring to the next launch is worse during testing: a tester who opens
-  // the app for thirty seconds a day would sit on a known bug for an extra day.
-  //
-  // So: if the download beats the splash, reload behind the curtain and the
-  // tester gets the fix in this session, having seen nothing but a slightly
-  // longer splash. If it doesn't, leave it — expo-updates installs a fetched
-  // bundle on the next cold start anyway, and by then the user is in the app,
-  // where a reload is never worth it.
+  // Instead: check when the app comes back from a real absence. Thirty minutes
+  // away means the session is over anyway, so a reload costs nothing the user
+  // was in the middle of, and expo-updates still installs anything fetched at
+  // the next cold start regardless.
+  const backgroundedAtRef = useRef(null);
+  const lastCheckRef = useRef(Date.now());
+
   useEffect(() => {
-    if (__DEV__) return;
-    Updates.checkForUpdateAsync()
-      .then((update) => {
-        if (!update.isAvailable) return null;
-        return Updates.fetchUpdateAsync();
-      })
-      .then((fetched) => {
-        if (!fetched?.isNew) return;
-        if (splashDoneRef.current) return; // user is in the app — wait for next launch
-        Updates.reloadAsync().catch(() => {});
-      })
-      .catch(() => {});
+    if (__DEV__) return undefined;
+
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "background" || next === "inactive") {
+        // Only stamp the first transition out — iOS fires inactive then
+        // background, and the second would reset the clock to "just left".
+        if (backgroundedAtRef.current == null) {
+          backgroundedAtRef.current = Date.now();
+        }
+        return;
+      }
+      if (next !== "active") return;
+
+      const leftAt = backgroundedAtRef.current;
+      backgroundedAtRef.current = null;
+
+      const now = Date.now();
+      if (!leftAt || now - leftAt < UPDATE_CHECK_INTERVAL) return;
+      if (now - lastCheckRef.current < UPDATE_CHECK_INTERVAL) return;
+      lastCheckRef.current = now;
+
+      Updates.checkForUpdateAsync()
+        .then((update) => (update.isAvailable ? Updates.fetchUpdateAsync() : null))
+        .then((fetched) => {
+          if (fetched?.isNew) Updates.reloadAsync().catch(() => {});
+        })
+        .catch(() => {});
+    });
+
+    return () => sub.remove();
   }, []);
 
   // Called by SplashTransition on its first onLayout — hides the native splash
@@ -96,10 +116,7 @@ export default function App() {
           <View style={styles.splashLayer}>
             <SplashTransition
               onReadyToPaint={handleSplashReady}
-              onDone={() => {
-                splashDoneRef.current = true;
-                setSplashDone(true);
-              }}
+              onDone={() => setSplashDone(true)}
               fontsReady={fontsReady}
             />
           </View>
