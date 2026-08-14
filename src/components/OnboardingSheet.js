@@ -183,7 +183,7 @@ export default function OnboardingSheet({ visible, onClose }) {
             <View style={styles.savorCard}>
               <View style={styles.savorMark}>
                 <Image
-                  source={require("../../assets/savor-logo.png")}
+                  source={require("../../assets/savor-logo.webp")}
                   style={styles.savorLogo}
                   resizeMode="contain"
                 />

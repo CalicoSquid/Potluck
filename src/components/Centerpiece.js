@@ -312,7 +312,7 @@ export default function Centerpiece({ phase, recipe, size, badge, banished }) {
           pointerEvents="none"
         >
           <Animated.Image
-            source={require("../../assets/spinner.png")}
+            source={require("../../assets/spinner.webp")}
             resizeMode="contain"
             style={{
               position: "absolute",
@@ -324,7 +324,7 @@ export default function Centerpiece({ phase, recipe, size, badge, banished }) {
             }}
           />
           <Image
-            source={require("../../assets/outer.png")}
+            source={require("../../assets/outer.webp")}
             resizeMode="contain"
             style={{ width: size, height: size }}
           />

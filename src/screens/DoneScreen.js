@@ -231,7 +231,11 @@ export default function DoneScreen({ navigation, route }) {
       {/* The dish is now in This Week, and the only door to This Week is the
           three-dot signature. Same breathing tell the void uses after an 86 —
           in the house colours, because nothing has gone wrong here. */}
-      <PotluckHeader onBack={() => navigation.goBack()} attention={filed} />
+      <PotluckHeader
+        onBack={() => navigation.goBack()}
+        attention={filed}
+        menuTab="week"
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -322,7 +326,7 @@ export default function DoneScreen({ navigation, route }) {
         <View style={styles.savorBlock}>
           
           <PotluckButton
-            imageIcon={require("../../assets/savor-logo.png")}
+            imageIcon={require("../../assets/savor-logo.webp")}
             title="Save this to Savor"
             subtitle="Keep it for next time"
             onPress={handleSave}

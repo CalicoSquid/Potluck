@@ -235,7 +235,7 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
       {/* ── Logo — mounts at native splash position, then lifts ── */}
       <View style={styles.logoWrap} pointerEvents="none">
         <Animated.Image
-          source={require("../../assets/potluck-splash.png")}
+          source={require("../../assets/potluck-splash.webp")}
           style={[styles.logo, { transform: [{ translateY: logoY }] }]}
           resizeMode="contain"
           fadeDuration={0}
@@ -262,7 +262,7 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
           <View style={styles.reelWindow}>
             {locked ? (
               <Image
-                source={require("../../assets/savor-logo.png")}
+                source={require("../../assets/savor-logo.webp")}
                 style={styles.lockedLogo}
                 resizeMode="contain"
               />

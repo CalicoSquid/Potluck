@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  AppState,
   Image,
   Linking,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,7 +27,11 @@ import {
   getBanned,
   unbanRecipe,
 } from "../lib/banStore";
-import { openSavorStore } from "../lib/savor";
+import {
+  claimPotluckSavorTheme,
+  getInstalledSavorScheme,
+  openSavorStore,
+} from "../lib/savor";
 
 const PRIVACY_URL = "https://getsavor.recipes/privacy";
 const COFFEE_URL = "https://buymeacoffee.com/calicosquid";
@@ -88,15 +95,32 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
 
   const [readings, setReadings] = useState([]);
   const [voidEntries, setVoidEntries] = useState([]);
-  const [tab, setTab] = useState("about");
+  // The caller owns the meaning of the menu tap: normal screens open About,
+  // Done opens This Week, and a fresh 86 opens The Void. Initialise directly
+  // to that intent so there is no async tab jump on the first visible frame.
+  const [tab, setTab] = useState(initialTab || "about");
   const [voidBusy, setVoidBusy] = useState(false);
   const [voidFeedback, setVoidFeedback] = useState("");
   const [confirmEmptyVoid, setConfirmEmptyVoid] = useState(false);
+
+  // Potluck only needs to know whether Savor exists. Theme ownership remains
+  // Savor's job, where the authenticated collab claim is already idempotent.
+  const [savorScheme, setSavorScheme] = useState(null);
+  const [savorChecked, setSavorChecked] = useState(false);
+
+  // A real drag-to-dismiss handle. Core Animated + PanResponder are enough for
+  // this sheet, so we avoid adding another animation dependency just to honour
+  // a 100px downward gesture. The new native build is required by Savor app
+  // visibility, not by the gesture itself.
+  const dragY = useRef(new Animated.Value(0)).current;
+  const closingRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return undefined;
 
     let cancelled = false;
+    closingRef.current = false;
+    dragY.setValue(0);
     setVoidFeedback("");
     setConfirmEmptyVoid(false);
 
@@ -105,29 +129,36 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
         if (cancelled) return;
         setReadings(readingList);
         setVoidEntries(bannedList);
-        // An explicit intent from the caller wins — the header passes
-        // initialTab="void" when its dots were wearing the void colourway, so
-        // the tap lands where it looked like it would. Falls back to the
-        // normal precedence, and still degrades gracefully if the void turns
-        // out to be empty by the time the sheet opens.
-        setTab(
-          initialTab === "void" && bannedList.length
-            ? "void"
-            : initialTab === "week" && readingList.length
-              ? "week"
-              : readingList.length
-                ? "week"
-                : bannedList.length
-                  ? "void"
-                  : "about",
-        );
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [visible, initialTab]);
+  }, [visible, initialTab, dragY]);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+
+    let cancelled = false;
+
+    const refreshSavor = async () => {
+      const scheme = await getInstalledSavorScheme();
+      if (cancelled) return;
+      setSavorScheme(scheme);
+      setSavorChecked(true);
+    };
+
+    refreshSavor();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshSavor();
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [visible]);
 
   const hasReadings = readings.length > 0;
   const openReading = (recipe) => {
@@ -188,13 +219,51 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
     }
   };
 
+  const settleSheet = () => {
+    Animated.spring(dragY, {
+      toValue: 0,
+      damping: 20,
+      stiffness: 240,
+      mass: 0.72,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animateClose = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Animated.timing(dragY, {
+      toValue: 900,
+      duration: 190,
+      useNativeDriver: true,
+    }).start(() => onClose());
+  };
+
   const closeSheet = () => {
     if (confirmEmptyVoid) {
       setConfirmEmptyVoid(false);
       return;
     }
-    onClose();
+    animateClose();
   };
+
+  const dragResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 5 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_, gesture) => {
+          dragY.setValue(Math.max(0, gesture.dy));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 92 || gesture.vy > 1.05) animateClose();
+          else settleSheet();
+        },
+        onPanResponderTerminate: settleSheet,
+      }),
+    [onClose],
+  );
 
   return (
     <Modal
@@ -213,12 +282,18 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
           accessibilityLabel="Close sheet"
         />
 
-        <View style={styles.sheet}>
-          {/* No handle and no close button. The notch implied a drag the sheet
-              couldn't honour, and an X was furniture on something that already
-              dismisses via the backdrop and the system back button. When
-              Reanimated lands in a native build the handle comes back with a
-              real gesture behind it. */}
+        <Animated.View
+          style={[styles.sheet, { transform: [{ translateY: dragY }] }]}
+        >
+          <View
+            style={styles.sheetHeader}
+            {...dragResponder.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Drag down to close"
+          >
+            <View style={styles.handle} />
+          </View>
+
           <View style={styles.tabs}>
             {TABS.map((item) => (
               <TouchableOpacity
@@ -434,7 +509,14 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
               </Text>
             </View>
           ) : (
-            <>
+            <ScrollView
+              style={styles.aboutScroll}
+              contentContainerStyle={styles.aboutContent}
+              showsVerticalScrollIndicator={false}
+              bounces
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.title}>What is this?</Text>
 
               <Text style={styles.body}>
@@ -448,12 +530,50 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
                 here comes from the Savor community.
               </Text>
 
-              <PotluckButton
-                imageIcon={require("../../assets/savor-logo.png")}
-                title="Get Savor — it's free"
-                subtitle="Your own recipe box. No subscription to start."
-                onPress={openSavorStore}
-              />
+              <View style={styles.savorSlot}>
+                {savorChecked && savorScheme ? (
+                  <TouchableOpacity
+                    style={styles.themeGift}
+                    onPress={() => claimPotluckSavorTheme(savorScheme)}
+                    activeOpacity={0.78}
+                    accessibilityRole="button"
+                    accessibilityLabel="Accept the free Potluck theme in Savor"
+                  >
+                    <View style={styles.themeGiftIconWrap}>
+                      <Image
+                        source={require("../../assets/potluck-theme-icon.webp")}
+                        style={styles.themeGiftIcon}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <View style={styles.themeGiftCopy}>
+                      <Text style={styles.themeGiftEyebrow}>FREE SAVOR THEME</Text>
+                      <Text style={styles.themeGiftTitle}>Accept the gift</Text>
+                      <Text style={styles.themeGiftSub}>
+                        The universe has redecorated.
+                      </Text>
+                    </View>
+                    <Icon
+                      source="chevron-right"
+                      size={19}
+                      color="rgba(255,255,255,0.55)"
+                    />
+                  </TouchableOpacity>
+                ) : savorChecked ? (
+                  <>
+                    <PotluckButton
+                      imageIcon={require("../../assets/savor-logo.webp")}
+                      title="Meet Savor"
+                      subtitle="Your own recipe box. Free to start."
+                      onPress={openSavorStore}
+                    />
+                    <Text style={styles.savorTeaser}>
+                      Return here once it&apos;s installed. The cosmos has a small
+                      token of appreciation waiting.
+                    </Text>
+                  </>
+                ) : null}
+              </View>
 
               <View style={styles.links}>
                 <TouchableOpacity
@@ -476,9 +596,9 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
               <Text style={styles.credit}>
                 Made by CalicoSquid{version ? ` · v${version}` : ""}
               </Text>
-            </>
+            </ScrollView>
           )}
-        </View>
+        </Animated.View>
 
         {confirmEmptyVoid ? (
           <View style={styles.confirmLayer} accessibilityViewIsModal>
@@ -568,10 +688,19 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    // Was 18 + the notch's 14pt bottom margin; the notch is gone, so the sheet
-    // carries the whole gap itself and the tabs sit where they always did.
-    paddingTop: 26,
+    paddingTop: 8,
     paddingBottom: 34,
+  },
+  sheetHeader: {
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handle: {
+    width: 38,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: tealAlpha(0.18),
   },
 
   // ── Tabs ────────────────────────────────────────────────────────────────
@@ -636,6 +765,74 @@ const styles = StyleSheet.create({
     color: colors.teal,
     opacity: 0.55,
     textAlign: "center",
+  },
+
+  // ── Potluck × Savor handoff ───────────────────────────────────────────
+  savorSlot: {
+    minHeight: 0,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  themeGift: {
+    minHeight: 66,
+    marginVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 11,
+    borderRadius: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.tealDark,
+    borderWidth: 1,
+    borderColor: colors.tealLight,
+    shadowColor: colors.tealDark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 9,
+    elevation: 4,
+  },
+  themeGiftIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.10)",
+    flexShrink: 0,
+  },
+  themeGiftIcon: { width: 31, height: 31 },
+  themeGiftCopy: { flex: 1, minWidth: 0 },
+  themeGiftEyebrow: {
+    fontFamily: "RalewayBold",
+    fontSize: 8.5,
+    letterSpacing: 1.05,
+    color: colors.primary,
+    marginBottom: 1,
+  },
+  themeGiftTitle: {
+    fontFamily: "RalewayBold",
+    fontSize: 15,
+    lineHeight: 18,
+    color: colors.offWhite,
+  },
+  themeGiftSub: {
+    marginTop: 1,
+    fontFamily: "Raleway",
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: colors.offWhite,
+    opacity: 0.66,
+  },
+  savorTeaser: {
+    marginTop: 0,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    fontFamily: "RalewaySemiBold",
+    fontSize: 11,
+    lineHeight: 17,
+    textAlign: "center",
+    color: colors.teal,
+    opacity: 0.52,
   },
 
   // ── Readings list ───────────────────────────────────────────────────────
@@ -920,6 +1117,12 @@ const styles = StyleSheet.create({
   },
 
   // ── About ───────────────────────────────────────────────────────────────
+  aboutScroll: {
+    flexShrink: 1,
+  },
+  aboutContent: {
+    paddingBottom: 4,
+  },
   body: {
     fontFamily: "Raleway",
     fontSize: 14,

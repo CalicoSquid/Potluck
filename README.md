@@ -133,7 +133,7 @@ OTA updates use the `appVersion` runtime-version policy — a JS update only rea
 ## App identity
 
 - **Package / bundle ID:** `com.calicosquid.savorpotluck` (`.dev` suffix for development builds)
-- **Version:** 1.0.1
+- **Version:** 1.0.3
 - Potluck requests **no sensitive permissions** — no camera, storage, or contacts.
 
 ---

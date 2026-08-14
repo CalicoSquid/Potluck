@@ -33,6 +33,9 @@ import AboutSheet from "./AboutSheet";
  *   attention    — optional. When true, the signature breathes on a loop in the
  *                  normal colourway — used on Done to point at the menu the
  *                  dish was just filed into.
+ *   menuTab      — optional. Normal destination for the menu button. Defaults
+ *                  to About; Done uses This Week. A pending Void event always
+ *                  takes precedence so the tap lands where the signal points.
  */
 
 const DOT_COLORS = [colors.orange, "#4caf50", "#26a69a"];
@@ -77,7 +80,7 @@ const HeaderWheel = ({ spinning }) => {
       }}
     >
       <Animated.Image
-        source={require("../../assets/spinner.png")}
+        source={require("../../assets/spinner.webp")}
         resizeMode="contain"
         style={{
           position: "absolute",
@@ -89,7 +92,7 @@ const HeaderWheel = ({ spinning }) => {
         }}
       />
       <Image
-        source={require("../../assets/outer.png")}
+        source={require("../../assets/outer.webp")}
         resizeMode="contain"
         style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}
       />
@@ -220,11 +223,12 @@ const PotluckHeader = ({
   voidPending = false,
   onVoidSeen,
   attention = false,
+  menuTab = "about",
 }) => {
   const [aboutVisible, setAboutVisible] = useState(false);
-  // Which tab the *next* open should land on. Set at press time because
-  // onVoidSeen() flips voidPending false immediately.
-  const [openTab, setOpenTab] = useState(undefined);
+  // Which tab this open should land on. Set at press time because onVoidSeen()
+  // flips voidPending false immediately.
+  const [openTab, setOpenTab] = useState("about");
 
   return (
     <View style={styles.wrap} onLayout={onLayout}>
@@ -251,11 +255,14 @@ const PotluckHeader = ({
             voidPending={voidPending}
             attention={attention}
             onPress={() => {
-              // Capture the intent *before* clearing the flag. When the dots
-              // are wearing the void colourway, the tap means "show me what's
-              // in there" — landing on This Week (the sheet's default whenever
-              // any reading exists) answered a question nobody asked.
-              setOpenTab(voidPending ? "void" : undefined);
+              // The menu now has an explicit destination instead of asking the
+              // sheet to infer one from whatever data happens to exist. That
+              // inference caused two problems at once: the sheet briefly drew
+              // About before async storage loaded, then jumped to Week/Void;
+              // and a normal menu tap could land in The Void simply because it
+              // contained an old ban. Capture the actual intent before clearing
+              // the pending flag and mount the sheet directly on that tab.
+              setOpenTab(voidPending ? "void" : menuTab);
               setAboutVisible(true);
               onVoidSeen?.();   // seen is seen — the flag dies on open, not on close
             }}
@@ -270,12 +277,17 @@ const PotluckHeader = ({
         end={{ x: 1, y: 0 }}
       />
 
-      <AboutSheet
-        visible={aboutVisible}
-        onClose={() => setAboutVisible(false)}
-        onVoidChange={onVoidChange}
-        initialTab={openTab}
-      />
+      {/* Mount per-open rather than leaving an invisible sheet alive. Apart
+          from clearing stale tab state, this lets AboutSheet initialise on the
+          requested tab before its first visible frame — no About→Void flash. */}
+      {aboutVisible ? (
+        <AboutSheet
+          visible
+          onClose={() => setAboutVisible(false)}
+          onVoidChange={onVoidChange}
+          initialTab={openTab}
+        />
+      ) : null}
     </View>
   );
 };

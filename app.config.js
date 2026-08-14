@@ -9,7 +9,7 @@ export default {
     name: IS_DEV ? "Potluck (Dev)" : "Potluck",
     slug: "potluck-by-savor",
     owner: "calicosquid",
-    version: "1.0.2",
+    version: "1.0.3",
     orientation: "portrait",
     icon: "./assets/playstore_2.png",
     userInterfaceStyle: "light",
@@ -29,6 +29,11 @@ export default {
 
     ios: {
       supportsTablet: false,
+      // Required by Linking.canOpenURL on iOS. Harmless until Potluck ships
+      // there, and keeps the Savor-installed check cross-platform.
+      infoPlist: {
+        LSApplicationQueriesSchemes: ["savor", "savor-dev"],
+      },
       bundleIdentifier: IS_DEV
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
@@ -43,7 +48,7 @@ export default {
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
       // Increment this for every Play Store build submission.
-      versionCode: 6,
+      versionCode: 7,
       // Potluck needs no sensitive permissions — no camera, storage, or contacts.
       // Explicit empty array strips the default RN permission set and keeps
       // the Play Store install prompt clean.
@@ -54,6 +59,7 @@ export default {
       "expo-font",
       "expo-updates",
       "./plugins/withAdiRegistration",
+      "./plugins/withSavorQueries",
       [
         "expo-splash-screen",
         {

@@ -262,7 +262,7 @@ export default function RecipeScreen({ navigation, route }) {
               accessibilityLabel="Save this recipe to Savor"
             >
               <Image
-                source={require("../../assets/savor-logo.png")}
+                source={require("../../assets/savor-logo.webp")}
                 style={styles.savorBtnLogo}
                 resizeMode="contain"
               />
