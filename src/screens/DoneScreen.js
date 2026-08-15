@@ -26,7 +26,7 @@ import { commitTodaysPick } from "../lib/readings";
 import { unbanRecipe } from "../lib/banStore";
 import { fmtTotal } from "../lib/time";
 import { pick } from "../lib/spinCopy";
-import { saveToSavor, openSavorStore } from "../lib/savor";
+import { saveToSavor } from "../lib/savor";
 import ShareCard from "../components/ShareCard";
 import PotluckButton from "../components/PotluckButton";
 import PotluckHeader from "../components/PotluckHeader";

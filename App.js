@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { View, StyleSheet, AppState } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
   initialWindowMetrics,
@@ -43,8 +42,8 @@ export default function App() {
   //
   // Instead: check when the app comes back from a real absence. Thirty minutes
   // away means the session is over anyway, so a reload costs nothing the user
-  // was in the middle of, and expo-updates still installs anything fetched at
-  // the next cold start regardless.
+  // was in the middle of. app.config disables expo-updates' default launch check
+  // so this listener is the single owner of update timing.
   const backgroundedAtRef = useRef(null);
   const lastCheckRef = useRef(Date.now());
 
@@ -93,36 +92,32 @@ export default function App() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fffefe" }}>
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#fffefe" }}>
-
-        {/* Mounted from the first frame, UNDER the splash. It used to mount
+      {/* Mounted from the first frame, UNDER the splash. It used to mount
             only once the splash had finished, so everything the first paint
             depends on — safe-area insets resolving, the header's onLayout
             setting headerHeight (which gates ComicBackground), the AsyncStorage
             read that clears `booting` — all happened in full view, one after
             another. That cascade is the flash. Behind the splash it costs
             nothing: by the time the curtain lifts the screen has settled. */}
-        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-          <ApolloProvider client={client}>
-            <PaperProvider>
-              <RootNavigator />
-            </PaperProvider>
-          </ApolloProvider>
-        </SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ApolloProvider client={client}>
+          <PaperProvider>
+            <RootNavigator />
+          </PaperProvider>
+        </ApolloProvider>
+      </SafeAreaProvider>
 
-        {/* Absolute so it covers the app rather than displacing it. Above the
-            onboarding overlay's zIndex 50. */}
-        {!splashDone && (
-          <View style={styles.splashLayer}>
-            <SplashTransition
-              onReadyToPaint={handleSplashReady}
-              onDone={() => setSplashDone(true)}
-              fontsReady={fontsReady}
-            />
-          </View>
-        )}
-
-      </GestureHandlerRootView>
+      {/* Absolute so it covers the app rather than displacing it. Above the
+          onboarding overlay's zIndex 50. */}
+      {!splashDone && (
+        <View style={styles.splashLayer}>
+          <SplashTransition
+            onReadyToPaint={handleSplashReady}
+            onDone={() => setSplashDone(true)}
+            fontsReady={fontsReady}
+          />
+        </View>
+      )}
     </View>
   );
 }

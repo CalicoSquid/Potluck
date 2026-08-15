@@ -51,6 +51,8 @@ src/
 │   ├── InlineTimes.js
 │   ├── ComicBackground.js
 │   ├── SplashTransition.js
+│   ├── OnboardingSheet.js
+│   ├── ShareCard.js
 │   └── AboutSheet.js
 ├── constants/
 │   └── colors.js          ⭐ The single source of colour. No inline hexes.
@@ -60,6 +62,8 @@ src/
 │   ├── spinCopy.js        All of the wheel's voice + verdict logic
 │   ├── recipe.js          HTML-entity decoding for recipe data
 │   ├── readings.js        Daily-reading store (AsyncStorage, 7-day fade)
+│   ├── banStore.js        The Void / 86 persistence
+│   ├── savor.js           Savor detection, theme claim + recipe hand-off
 │   └── fontScaling.js
 ├── navigation/
 │   └── RootNavigator.js   Spin · Recipe · Done
@@ -71,7 +75,7 @@ src/
 
 ### Conventions
 
-- **`constants/colors.js` is the one colour source.** No local palette objects, no scattered hex literals. Use `colors.*`, the `tealAlpha(a)` helper for teal washes, and the exported `TEAL_GRADIENT` / `TEAL_SHADOW`.
+- **`constants/colors.js` owns the reusable Potluck palette.** Use `colors.*`, `tealAlpha(a)`, and the exported gradient/shadow helpers for shared styling; component-specific values can stay local when they are genuinely structural or one-off.
 - **Screens orchestrate; `lib/` and `components/` do the work.** Copy, parsing, time maths, and data shaping live in `lib/` so the screens stay thin.
 
 ---
@@ -80,7 +84,7 @@ src/
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.19.4+
 - An Android emulator / iOS simulator, or a physical device with a [development build](https://docs.expo.dev/develop/development-builds/introduction/) (Potluck uses native modules, so Expo Go alone won't run it)
 
 ### Install

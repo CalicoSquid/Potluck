@@ -32,9 +32,6 @@ export const getInstalledSavorScheme = async () => {
   return null;
 };
 
-export const isSavorInstalled = async () =>
-  Boolean(await getInstalledSavorScheme());
-
 // The whole point of Potluck: hand a dish over to Savor, where it's permanent.
 // Deep link if Savor is installed; the store if it isn't.
 //

@@ -17,7 +17,8 @@ This pass needs a fresh native build. It adds Android package visibility for Sav
   - In dev, production `savor://` is preferred; `savor-dev://` is accepted as a fallback.
 - About / This Week / The Void has a real grab handle and can be dragged downward to dismiss.
 - Runtime PNG artwork moved to high-quality WebP; native icon/splash PNGs remain PNG and were losslessly recompressed.
-- Two unused font files and a dead favicon were removed.
+- Dead PNG duplicates, two unused font files, and the dead favicon were removed.
+- The unused Gesture Handler wrapper/dependency was removed; the sheet uses core RN `PanResponder` + `Animated`.
 
 ## Dev test
 
@@ -53,3 +54,8 @@ For Metro after installing the new dev client:
 ```bash
 npx expo start -c
 ```
+
+
+## Drag sheet fix
+
+The grab header now has its own immediate responder, while the whole bottom sheet can also be dragged downward when its active scroll view is at the top. Test from About, This Week and The Void; scroll content down first and confirm a downward gesture scrolls content until it reaches the top, then a fresh downward pull dismisses the sheet. The handle itself should work regardless of the content scroll position.

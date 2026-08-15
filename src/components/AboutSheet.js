@@ -108,12 +108,12 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
   const [savorScheme, setSavorScheme] = useState(null);
   const [savorChecked, setSavorChecked] = useState(false);
 
-  // A real drag-to-dismiss handle. Core Animated + PanResponder are enough for
-  // this sheet, so we avoid adding another animation dependency just to honour
-  // a 100px downward gesture. The new native build is required by Savor app
-  // visibility, not by the gesture itself.
+  // Drag-to-dismiss uses core Animated + PanResponder. The handle has a
+  // dedicated responder; the sheet body only takes over on a downward pull
+  // while the active scroll view is already at the top.
   const dragY = useRef(new Animated.Value(0)).current;
   const closingRef = useRef(false);
+  const activeScrollYRef = useRef(0);
 
   useEffect(() => {
     if (!visible) return undefined;
@@ -121,6 +121,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
     let cancelled = false;
     closingRef.current = false;
     dragY.setValue(0);
+    activeScrollYRef.current = 0;
     setVoidFeedback("");
     setConfirmEmptyVoid(false);
 
@@ -141,6 +142,10 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
     if (!visible) return undefined;
 
     let cancelled = false;
+    // Never render yesterday's detection result while a fresh check is in
+    // flight. This keeps Meet Savor / Accept the gift truthful on every open.
+    setSavorScheme(null);
+    setSavorChecked(false);
 
     const refreshSavor = async () => {
       const scheme = await getInstalledSavorScheme();
@@ -159,6 +164,13 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
       subscription.remove();
     };
   }, [visible]);
+
+  useEffect(() => {
+    // Each tab owns its own scroll view. Treat a freshly selected tab as being
+    // at the top until that scroll view reports otherwise, so a downward pull
+    // can immediately become a sheet-dismiss gesture.
+    activeScrollYRef.current = 0;
+  }, [tab]);
 
   const hasReadings = readings.length > 0;
   const openReading = (recipe) => {
@@ -247,20 +259,60 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
     animateClose();
   };
 
-  const dragResponder = useMemo(
+  // The visible grab-handle gets its own responder so it behaves like the
+  // obvious affordance it is: touching anywhere in the 42px header starts a
+  // sheet drag immediately. The whole-sheet responder below remains the
+  // fallback for deliberate downward pulls from content.
+  const handleDragResponder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          gesture.dy > 5 &&
-          Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onPanResponderGrant: () => {
+          dragY.stopAnimation();
+        },
         onPanResponderMove: (_, gesture) => {
           dragY.setValue(Math.max(0, gesture.dy));
         },
         onPanResponderRelease: (_, gesture) => {
-          if (gesture.dy > 92 || gesture.vy > 1.05) animateClose();
+          if (gesture.dy > 72 || gesture.vy > 0.8) animateClose();
           else settleSheet();
         },
         onPanResponderTerminate: settleSheet,
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [onClose],
+  );
+
+  const dragResponder = useMemo(
+    () =>
+      PanResponder.create({
+        // Content also behaves like a real bottom sheet: when the active
+        // scroll view is already at the top, a deliberate downward pull from
+        // anywhere in the sheet takes over. Taps and upward scrolling remain
+        // untouched; the dedicated header responder above handles the grab
+        // affordance independently of scroll position.
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          activeScrollYRef.current <= 1 &&
+          gesture.dy > 7 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          activeScrollYRef.current <= 1 &&
+          gesture.dy > 7 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => {
+          dragY.stopAnimation();
+        },
+        onPanResponderMove: (_, gesture) => {
+          dragY.setValue(Math.max(0, gesture.dy));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 72 || gesture.vy > 0.8) animateClose();
+          else settleSheet();
+        },
+        onPanResponderTerminate: settleSheet,
+        onPanResponderTerminationRequest: () => false,
       }),
     [onClose],
   );
@@ -284,12 +336,13 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
 
         <Animated.View
           style={[styles.sheet, { transform: [{ translateY: dragY }] }]}
+          {...dragResponder.panHandlers}
         >
           <View
             style={styles.sheetHeader}
-            {...dragResponder.panHandlers}
             accessibilityRole="adjustable"
             accessibilityLabel="Drag down to close"
+            {...handleDragResponder.panHandlers}
           >
             <View style={styles.handle} />
           </View>
@@ -322,6 +375,10 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
                   style={styles.list}
                   showsVerticalScrollIndicator={false}
                   bounces={false}
+                  onScroll={(event) => {
+                    activeScrollYRef.current = event.nativeEvent.contentOffset.y;
+                  }}
+                  scrollEventThrottle={16}
                 >
                   {readings.map((entry) => {
                     const age = ageDays(entry);
@@ -418,6 +475,9 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
                     directionalLockEnabled
                     keyboardShouldPersistTaps="handled"
                     overScrollMode="never"
+                    onScroll={(event) => {
+                      activeScrollYRef.current = event.nativeEvent.contentOffset.y;
+                    }}
                     scrollEventThrottle={16}
                   >
                     {voidEntries.map((entry) => {
@@ -516,6 +576,10 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
               bounces
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
+              onScroll={(event) => {
+                activeScrollYRef.current = event.nativeEvent.contentOffset.y;
+              }}
+              scrollEventThrottle={16}
             >
               <Text style={styles.title}>What is this?</Text>
 
@@ -692,12 +756,12 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
   },
   sheetHeader: {
-    height: 34,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
   },
   handle: {
-    width: 38,
+    width: 42,
     height: 5,
     borderRadius: 999,
     backgroundColor: tealAlpha(0.18),

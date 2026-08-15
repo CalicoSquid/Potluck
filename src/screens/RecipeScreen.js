@@ -28,7 +28,7 @@ import {
 import { getTodaysReading, commitTodaysPick } from "../lib/readings";
 import { unbanRecipe } from "../lib/banStore";
 import { pick } from "../lib/spinCopy";
-import { saveToSavor, openSavorStore } from "../lib/savor";
+import { saveToSavor } from "../lib/savor";
 import PotluckButton from "../components/PotluckButton";
 import PotluckCard from "../components/PotluckCard";
 import PotluckHeader from "../components/PotluckHeader";

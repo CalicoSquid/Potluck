@@ -24,6 +24,9 @@ export default {
     updates: {
       url: "https://u.expo.dev/d98f6cca-5c80-42b3-93ae-bc5bce714533",
       enabled: !IS_DEV,
+      // App.js owns update checks after a real background absence. Disable the
+      // default launch check so startup can never trigger a surprise fetch.
+      checkAutomatically: "NEVER",
       fallbackToCacheTimeout: 0,
     },
 
@@ -49,9 +52,8 @@ export default {
         : "com.calicosquid.savorpotluck",
       // Increment this for every Play Store build submission.
       versionCode: 7,
-      // Potluck needs no sensitive permissions — no camera, storage, or contacts.
-      // Explicit empty array strips the default RN permission set and keeps
-      // the Play Store install prompt clean.
+      // Potluck adds no extra Android permissions here. Dependencies may still
+      // contribute normal permissions required for their own runtime behavior.
       permissions: [],
     },
 
