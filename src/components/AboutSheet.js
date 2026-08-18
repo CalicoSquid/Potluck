@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import he from "he";
 import { Icon } from "react-native-paper";
@@ -35,6 +36,7 @@ import {
 
 const PRIVACY_URL = "https://getsavor.recipes/privacy";
 const COFFEE_URL = "https://buymeacoffee.com/calicosquid";
+const THEME_HANDOFF_KEY = "@potluck/savor-theme-handoff-v1";
 
 // The app is English-only. `undefined` here means "use the device locale",
 // which handed a Spanish tester "sábado" sitting under English chrome — the
@@ -107,6 +109,11 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
   // Savor's job, where the authenticated collab claim is already idempotent.
   const [savorScheme, setSavorScheme] = useState(null);
   const [savorChecked, setSavorChecked] = useState(false);
+  // Potluck cannot verify Savor ownership without becoming an auth client.
+  // Persist only that this device successfully handed the claim intent to
+  // Savor, so the large one-time gift CTA can make room for the next action.
+  const [themeGiftSent, setThemeGiftSent] = useState(false);
+  const [themeGiftStateLoaded, setThemeGiftStateLoaded] = useState(false);
 
   // Drag-to-dismiss uses core Animated + PanResponder. The handle has a
   // dedicated responder; the sheet body only takes over on a downward pull
@@ -143,7 +150,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
 
     let cancelled = false;
     // Never render yesterday's detection result while a fresh check is in
-    // flight. This keeps Meet Savor / Accept the gift truthful on every open.
+    // flight. This keeps Meet Savor / gift handoff truthful on every open.
     setSavorScheme(null);
     setSavorChecked(false);
 
@@ -166,6 +173,29 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
   }, [visible]);
 
   useEffect(() => {
+    if (!visible) return undefined;
+
+    let cancelled = false;
+    setThemeGiftStateLoaded(false);
+
+    AsyncStorage.getItem(THEME_HANDOFF_KEY)
+      .then((value) => {
+        if (cancelled) return;
+        setThemeGiftSent(value === "1");
+        setThemeGiftStateLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setThemeGiftSent(false);
+        setThemeGiftStateLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible]);
+
+  useEffect(() => {
     // Each tab owns its own scroll view. Treat a freshly selected tab as being
     // at the top until that scroll view reports otherwise, so a downward pull
     // can immediately become a sheet-dismiss gesture.
@@ -173,6 +203,23 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
   }, [tab]);
 
   const hasReadings = readings.length > 0;
+
+  const sendThemeGift = async () => {
+    if (!savorScheme) return;
+
+    // Persist the attempted handoff before Android backgrounds Potluck to open
+    // Savor. If launching unexpectedly fails, roll the marker back while we
+    // still own the foreground. This is intentionally not an ownership claim.
+    setThemeGiftSent(true);
+    await AsyncStorage.setItem(THEME_HANDOFF_KEY, "1").catch(() => {});
+
+    const handedOff = await claimPotluckSavorTheme(savorScheme);
+    if (handedOff) return;
+
+    setThemeGiftSent(false);
+    await AsyncStorage.removeItem(THEME_HANDOFF_KEY).catch(() => {});
+  };
+
   const openReading = (recipe) => {
     onClose();
     navigation.push("Recipe", { recipe, mode: "history" });
@@ -595,35 +642,37 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
               </Text>
 
               <View style={styles.savorSlot}>
-                {savorChecked && savorScheme ? (
-                  <TouchableOpacity
-                    style={styles.themeGift}
-                    onPress={() => claimPotluckSavorTheme(savorScheme)}
-                    activeOpacity={0.78}
-                    accessibilityRole="button"
-                    accessibilityLabel="Accept the free Potluck theme in Savor"
-                  >
-                    <View style={styles.themeGiftIconWrap}>
-                      <Image
-                        source={require("../../assets/potluck-theme-icon.webp")}
-                        style={styles.themeGiftIcon}
-                        resizeMode="contain"
-                      />
+                {!savorChecked ? null : savorScheme ? (
+                  !themeGiftStateLoaded ? null : themeGiftSent ? (
+                    <View style={styles.themeSentRow}>
+                      <View style={styles.themeSentStatus}>
+                        <Icon
+                          source="check-circle"
+                          size={14}
+                          color={colors.teal}
+                        />
+                        <Text style={styles.themeSentText}>Theme sent to Savor</Text>
+                      </View>
+                      <Text style={styles.themeSentSeparator}>·</Text>
+                      <TouchableOpacity
+                        onPress={sendThemeGift}
+                        activeOpacity={0.62}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Send the free Potluck theme to Savor again"
+                      >
+                        <Text style={styles.themeResendText}>Send again</Text>
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.themeGiftCopy}>
-                      <Text style={styles.themeGiftEyebrow}>FREE SAVOR THEME</Text>
-                      <Text style={styles.themeGiftTitle}>Accept the gift</Text>
-                      <Text style={styles.themeGiftSub}>
-                        The universe has redecorated.
-                      </Text>
-                    </View>
-                    <Icon
-                      source="chevron-right"
-                      size={19}
-                      color="rgba(255,255,255,0.55)"
+                  ) : (
+                    <PotluckButton
+                      imageIcon={require("../../assets/potluck-theme-icon.webp")}
+                      title="Claim your Potluck theme"
+                      subtitle="Free in Savor · Fate approved."
+                      onPress={sendThemeGift}
                     />
-                  </TouchableOpacity>
-                ) : savorChecked ? (
+                  )
+                ) : (
                   <>
                     <PotluckButton
                       imageIcon={require("../../assets/savor-logo.webp")}
@@ -636,7 +685,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
                       token of appreciation waiting.
                     </Text>
                   </>
-                ) : null}
+                )}
               </View>
 
               <View style={styles.links}>
@@ -647,7 +696,7 @@ const AboutSheet = ({ visible, onClose, onVoidChange, initialTab }) => {
                 >
                   <Text style={styles.link}>☕ Buy me a coffee</Text>
                 </TouchableOpacity>
-                <View style={styles.linkDivider} />
+                <Text style={styles.linkSeparator}>·</Text>
                 <TouchableOpacity
                   onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
                   hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
@@ -834,58 +883,42 @@ const styles = StyleSheet.create({
   // ── Potluck × Savor handoff ───────────────────────────────────────────
   savorSlot: {
     minHeight: 0,
-    marginTop: 2,
-    marginBottom: 4,
+    marginTop: 0,
+    marginBottom: 8,
   },
-  themeGift: {
-    minHeight: 66,
-    marginVertical: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 11,
-    borderRadius: 18,
+  themeSentRow: {
+    minHeight: 26,
+    marginTop: -2,
+    marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.tealDark,
-    borderWidth: 1,
-    borderColor: colors.tealLight,
-    shadowColor: colors.tealDark,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 9,
-    elevation: 4,
+    justifyContent: "flex-start",
+    gap: 7,
   },
-  themeGiftIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+  themeSentStatus: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.10)",
-    flexShrink: 0,
+    gap: 5,
+    opacity: 0.7,
   },
-  themeGiftIcon: { width: 31, height: 31 },
-  themeGiftCopy: { flex: 1, minWidth: 0 },
-  themeGiftEyebrow: {
+  themeSentText: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.teal,
+  },
+  themeSentSeparator: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.teal,
+    opacity: 0.28,
+  },
+  themeResendText: {
     fontFamily: "RalewayBold",
-    fontSize: 8.5,
-    letterSpacing: 1.05,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.primary,
-    marginBottom: 1,
-  },
-  themeGiftTitle: {
-    fontFamily: "RalewayBold",
-    fontSize: 15,
-    lineHeight: 18,
-    color: colors.offWhite,
-  },
-  themeGiftSub: {
-    marginTop: 1,
-    fontFamily: "Raleway",
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: colors.offWhite,
-    opacity: 0.66,
   },
   savorTeaser: {
     marginTop: 0,
@@ -1200,28 +1233,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 14,
-    marginTop: 6,
+    gap: 10,
+    marginTop: 2,
   },
   link: {
     fontFamily: "RalewaySemiBold",
     fontSize: 13,
     color: colors.teal,
-    opacity: 0.55,
+    opacity: 0.62,
   },
-  linkDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: colors.teal,
-    opacity: 0.2,
+  linkSeparator: {
+    fontFamily: "RalewaySemiBold",
+    fontSize: 12,
+    color: colors.teal,
+    opacity: 0.26,
   },
   credit: {
     fontFamily: "Raleway",
     fontSize: 11,
     color: colors.teal,
-    opacity: 0.4,
+    opacity: 0.5,
     textAlign: "center",
-    marginTop: 14,
+    marginTop: 10,
     letterSpacing: 0.3,
   },
 });

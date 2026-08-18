@@ -51,7 +51,7 @@ export default {
         ? "com.calicosquid.savorpotluck.dev"
         : "com.calicosquid.savorpotluck",
       // Increment this for every Play Store build submission.
-      versionCode: 7,
+      versionCode: 8,
       // Potluck adds no extra Android permissions here. Dependencies may still
       // contribute normal permissions required for their own runtime behavior.
       permissions: [],

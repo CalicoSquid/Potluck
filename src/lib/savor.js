@@ -51,13 +51,34 @@ export const saveToSavor = (recipeId) => {
 // partner themes. About only shows this action after `getInstalledSavorScheme`
 // confirms Savor is present, but the store fallback stays here as a last-resort
 // guard against an uninstall/race between detection and tapping.
-export const claimPotluckSavorTheme = (scheme = "savor") => {
+export const claimPotluckSavorTheme = async (scheme = "savor") => {
   const targetScheme =
     __DEV__ && scheme === "savor-dev" ? "savor-dev" : "savor";
   const url = `${targetScheme}://collab?id=${encodeURIComponent(POTLUCK_THEME_ID)}`;
-  Linking.openURL(url).catch(() => {
+
+  try {
+    await Linking.openURL(url);
+    return true;
+  } catch {
     Linking.openURL(STORE_URL).catch(() => {});
-  });
+    return false;
+  }
+};
+
+// Opens Savor without asking it to perform another action. Bare scheme launches
+// are intentionally ignored by Savor's deep-link router and fall through to its
+// normal Home/Welcome routing on a cold start.
+export const openSavor = async (scheme = "savor") => {
+  const targetScheme =
+    __DEV__ && scheme === "savor-dev" ? "savor-dev" : "savor";
+
+  try {
+    await Linking.openURL(`${targetScheme}://`);
+    return true;
+  } catch {
+    Linking.openURL(STORE_URL).catch(() => {});
+    return false;
+  }
 };
 
 export const openSavorStore = () => {

@@ -100,6 +100,7 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
   // Tagline typewriter
   const [taglineCount, setTaglineCount] = useState(0);
   const typeRef = useRef(null);
+  const typeStartRef = useRef(null);
 
   const layoutFiredRef = useRef(false);
 
@@ -138,18 +139,27 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
 
-    setTimeout(() => {
+    typeStartRef.current = setTimeout(() => {
       let i = 0;
       typeRef.current = setInterval(() => {
         i += 1;
         setTaglineCount(i);
         if (i >= TAGLINE_LEN) {
           clearInterval(typeRef.current);
-          setTimeout(fadeOut, 700);
         }
       }, 45);
     }, 200);
   };
+
+  // Start the hold only after React has committed the complete phrase. On a
+  // busy first launch, starting this timer inside the final interval tick could
+  // spend most of the 700ms before the last word ever reached the screen.
+  useEffect(() => {
+    if (taglineCount < TAGLINE_LEN) return undefined;
+
+    const fadeTimer = setTimeout(fadeOut, 700);
+    return () => clearTimeout(fadeTimer);
+  }, [taglineCount]);
 
   // ── Main animation ────────────────────────────────────────────────────
   useEffect(() => {
@@ -222,6 +232,7 @@ const SplashTransition = ({ onReadyToPaint, onDone, fontsReady }) => {
       clearTimeout(reelAppearTimer);
       clearTimeout(startCyclingTimer);
       clearTimeout(tickRef.current);
+      clearTimeout(typeStartRef.current);
       clearInterval(typeRef.current);
     };
   }, [fontsReady]);
